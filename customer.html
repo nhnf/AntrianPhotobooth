@@ -67,6 +67,15 @@
     <!-- TOAST CONTAINER -->
     <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-3 w-[90%] max-w-sm pointer-events-none"></div>
 
+    <!-- CUSTOM POPUP MODAL -->
+    <div id="custom-popup" class="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-[100] flex items-center justify-center p-4 hidden transition-opacity duration-200">
+        <div class="bg-white border-4 border-black shadow-[8px_8px_0px_0px_#000] p-6 max-w-sm w-full transform transition-all duration-300 scale-95 opacity-0" id="popup-content">
+            <h2 id="popup-title" class="text-xl font-black uppercase tracking-tight border-b-4 border-black pb-1 mb-4 inline-block pr-4">Perhatian</h2>
+            <div id="popup-body" class="font-bold mb-6 text-sm leading-relaxed"></div>
+            <button onclick="closePopup()" class="w-full bg-neoCyan text-black font-black uppercase py-3 border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[2px_2px_0px_0px_#000] active:translate-y-1 active:shadow-none transition-all">Tutup</button>
+        </div>
+    </div>
+
     <script src="shared/config.js"></script>
 
     <!-- SECTION 1: PILIH BACKGROUND -->
@@ -230,15 +239,16 @@
         async function submitQueue() {
             const nama = document.getElementById('input-nama').value.trim();
             const kelas = document.getElementById('input-kelas').value.trim();
-            const alamat = document.getElementById('input-alamat').value.trim();
-
-            if (!nama || !kelas || !alamat) {
-                return alert("Harap isi Nama Lengkap, Kelas, dan Alamat!");
+            const qtyInputs = document.querySelectorAll('.qty-val');
+            
+            if (!nama || !kelas) {
+                return showPopup("Data Belum Lengkap", "Harap isi <b>Nama</b> dan <b>Kelas/Asal</b> Anda sebelum mengambil tiket.");
             }
 
             const selectedBgs = backgrounds.filter(bg => bgQuantities[bg.id] > 0);
+            
             if (selectedBgs.length === 0) {
-                return alert("Pilih setidaknya 1 background dengan jumlah minimal 1 foto!");
+                return showPopup("Pilih Background", "Anda harus memilih minimal <b>satu background photobooth</b>!");
             }
 
             document.getElementById('selection-section').classList.add('hidden');
@@ -481,7 +491,7 @@
                 .in('status', ['menunggu', 'dipanggil', 'ditunda']);
                 
             if (error || !data || data.length === 0) {
-                alert(`Antrian ${queueId} tidak ditemukan, dibatalkan, atau sudah selesai.`);
+                showPopup("Tiket Kadaluarsa", `Antrian <b>${queueId}</b> tidak ditemukan, dibatalkan, atau sudah selesai.`);
                 resetApp();
                 return;
             }
@@ -513,7 +523,7 @@
         async function lacakTiket() {
             const input = document.getElementById('input-lacak').value.trim();
             if (input.length < 3) {
-                alert("Masukkan minimal 3 huruf/angka untuk mencari.");
+                showPopup("Terlalu Pendek", "Masukkan minimal <b>3 huruf/angka</b> untuk melacak.");
                 return;
             }
 
@@ -539,7 +549,7 @@
             btn.disabled = false;
 
             if (error || !data || data.length === 0) {
-                alert("Antrian tidak ditemukan. Pastikan ejaan nama benar dan antrian belum selesai.");
+                showPopup("Tidak Ditemukan", "Antrian tidak ditemukan. Pastikan ejaan nama benar dan antrian Anda belum diproses sampai selesai.");
                 return;
             }
 
@@ -554,14 +564,53 @@
             });
 
             if (uniqueTickets.length > 1) {
-                let msg = "Ditemukan beberapa tiket dengan nama tersebut:\n\n";
-                uniqueTickets.forEach(t => msg += `• ${t.nomor_antrian} : ${t.nama_lengkap} (${t.kelas})\n`);
-                msg += "\nSilakan ketik NOMOR TIKET yang tepat di kolom pencarian.";
-                alert(msg);
+                let html = "<p class='mb-2'>Ditemukan beberapa tiket aktif:</p><div class='space-y-3 mt-3 max-h-48 overflow-y-auto pr-2'>";
+                uniqueTickets.forEach(t => {
+                    html += `
+                        <div class="bg-bgLight border-2 border-black p-2 shadow-[2px_2px_0px_0px_#000]">
+                            <span class="font-black bg-neoYellow px-2 border-2 border-black inline-block mb-1">${t.nomor_antrian}</span>
+                            <div class="leading-tight uppercase font-black">${t.nama_lengkap}</div>
+                            <div class="font-mono text-xs uppercase">${t.kelas}</div>
+                        </div>
+                    `;
+                });
+                html += "</div><p class='mt-4 text-xs font-mono bg-neoPink p-2 border-2 border-black'>Copy/Ketik <b>Nomor Tiket</b> di atas untuk melacak secara spesifik.</p>";
+                showPopup("Pilih Tiket Anda", html);
                 return;
             }
 
             restoreQueue(uniqueTickets[0].nomor_antrian);
+        }
+
+        function showPopup(title, bodyHTML) {
+            const colors = ['bg-neoYellow', 'bg-neoPink', 'bg-neoCyan', 'bg-neoGreen'];
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            const titleEl = document.getElementById('popup-title');
+            titleEl.textContent = title;
+            titleEl.className = `text-xl font-black uppercase tracking-tight border-b-4 border-black pb-1 mb-4 inline-block pr-4 ${randomColor}`;
+            
+            document.getElementById('popup-body').innerHTML = bodyHTML;
+            const popup = document.getElementById('custom-popup');
+            const content = document.getElementById('popup-content');
+            
+            popup.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+                content.classList.add('scale-100', 'opacity-100');
+            });
+        }
+
+        function closePopup() {
+            const popup = document.getElementById('custom-popup');
+            const content = document.getElementById('popup-content');
+            
+            content.classList.remove('scale-100', 'opacity-100');
+            content.classList.add('scale-95', 'opacity-0');
+            
+            setTimeout(() => {
+                popup.classList.add('hidden');
+            }, 300);
         }
     </script>
 </body>
