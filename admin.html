@@ -69,17 +69,22 @@
     <script src="shared/config.js"></script>
 
     <!-- HEADER -->
-    <header class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 neo-card p-6 bg-neoCyan">
-        <div>
-            <h1 class="text-4xl font-black uppercase tracking-tighter">Operator Dashboard</h1>
-            <p class="font-mono text-sm font-bold border-b-2 border-black inline-block mt-1">SMART QUEUE + FITUR TUNDA</p>
+    <header class="p-3 md:p-4 flex flex-col md:flex-row justify-between items-center border-b-4 border-black bg-white mb-6 gap-3">
+        <div class="flex items-center gap-3">
+            <img src="logo-mm.png" alt="Logo" class="h-8 md:h-10">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-black uppercase tracking-tighter leading-none">
+                    Admin<span class="bg-black text-white px-2 ml-1 inline-block">Control</span>
+                </h1>
+                <p class="font-mono text-[10px] md:text-xs font-bold text-gray-500 uppercase mt-1">SMART QUEUE • MEDIATECH AN-NUR II</p>
+            </div>
         </div>
-        <div class="flex flex-col md:flex-row gap-4">
-            <button onclick="broadcastClearCache()" class="neo-button bg-neoCyan font-bold uppercase py-3 px-4 md:px-6 text-xs md:text-sm tracking-widest flex items-center justify-center gap-2">
-                Wipe Cache HP
+        <div class="flex gap-2 w-full md:w-auto">
+            <button onclick="broadcastClearCache()" class="flex-1 md:flex-none neo-button bg-neoCyan font-bold uppercase py-2 px-3 text-xs tracking-wider">
+                Wipe Cache
             </button>
-            <button onclick="resetAllQueues()" class="neo-button bg-neoRed font-bold uppercase py-3 px-4 md:px-6 text-xs md:text-sm tracking-widest flex items-center justify-center gap-2">
-                Reset Semua Antrian
+            <button onclick="resetAllQueues()" class="flex-1 md:flex-none neo-button bg-neoRed font-bold uppercase py-2 px-3 text-xs tracking-wider">
+                Reset Semua
             </button>
         </div>
     </header>
