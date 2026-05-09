@@ -454,7 +454,11 @@ async function showNotification(title, body) {
                 requireInteraction: true
             });
         } catch (e) {
-            new Notification(title, { body: body });
+            new Notification(title, { 
+                body: body, 
+                icon: logoUrl, 
+                badge: logoUrl 
+            });
         }
     }
 
