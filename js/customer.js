@@ -57,13 +57,7 @@ function initSystemChannel() {
 
     systemChannel.on('broadcast', { event: 'update_prefix' }, (payload) => {
         const newPrefix = payload.payload.prefix;
-        localStorage.setItem('customerTicketPrefix', newPrefix);
-
-        const indicator = document.getElementById('prefix-indicator');
-        if (indicator) indicator.textContent = 'KODE: ' + newPrefix;
-
-        const inputLacak = document.getElementById('input-lacak');
-        if (inputLacak) inputLacak.placeholder = newPrefix + '-...';
+        applyPrefix(newPrefix);
     });
 
     systemChannel.subscribe((status) => {
@@ -77,15 +71,47 @@ function initSystemChannel() {
             }, 1000);
         }
     });
-}
-initSystemChannel();
 
-// Set initial prefix display
-const initialPrefix = localStorage.getItem('customerTicketPrefix') || 'PB';
-const indicator = document.getElementById('prefix-indicator');
-if (indicator) indicator.textContent = 'KODE: ' + initialPrefix;
-const inputLacak = document.getElementById('input-lacak');
-if (inputLacak) inputLacak.placeholder = initialPrefix + '-...';
+    // Also subscribe to database changes on settings table for real-time prefix sync
+    supabaseClient.channel('settings-sync')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'settings' }, (payload) => {
+            if (payload.new && payload.new.key === 'ticket_prefix') {
+                applyPrefix(payload.new.value);
+            }
+        })
+        .subscribe();
+}
+
+function applyPrefix(newPrefix) {
+    if (!newPrefix) return;
+    localStorage.setItem('customerTicketPrefix', newPrefix);
+
+    const indicator = document.getElementById('prefix-indicator');
+    if (indicator) indicator.textContent = 'KODE: ' + newPrefix;
+
+    const inputLacak = document.getElementById('input-lacak');
+    if (inputLacak) inputLacak.placeholder = newPrefix + '-...';
+}
+
+// Load prefix from database (source of truth), then initialize channel
+async function loadPrefixFromDB() {
+    try {
+        const { data, error } = await supabaseClient
+            .from('settings')
+            .select('value')
+            .eq('key', 'ticket_prefix')
+            .single();
+        if (!error && data) {
+            applyPrefix(data.value);
+        }
+    } catch (e) {
+        console.error('Failed to load prefix from DB:', e);
+    }
+}
+
+// Initialize: load from DB first, then start channel for live updates
+loadPrefixFromDB();
+initSystemChannel();
 
 // ============================================
 // Background Loading & Selection
@@ -417,11 +443,13 @@ async function showNotification(title, body) {
 
     // OS Notification
     if ('Notification' in window && Notification.permission === 'granted') {
+        const logoUrl = new URL('logo-mm.png', self.location.origin + self.location.pathname.replace(/\/[^/]*$/, '/')).href;
         try {
             const reg = await navigator.serviceWorker.ready;
             reg.showNotification(title, {
                 body: body,
-                icon: 'https://cdn-icons-png.flaticon.com/512/1041/1041916.png',
+                icon: logoUrl,
+                badge: logoUrl,
                 vibrate: [500, 200, 500, 200, 1000],
                 requireInteraction: true
             });
@@ -571,7 +599,8 @@ async function lacakTiket() {
         .select('nomor_antrian, nama_lengkap, kelas')
         .in('status', ACTIVE_STATUSES);
 
-    if (input.toUpperCase().startsWith('PB-')) {
+    const currentPrefixVal = localStorage.getItem('customerTicketPrefix') || 'PB';
+    if (input.toUpperCase().startsWith(currentPrefixVal + '-')) {
         query = query.eq('nomor_antrian', input.toUpperCase());
     } else {
         query = query.ilike('nama_lengkap', `%${input}%`);

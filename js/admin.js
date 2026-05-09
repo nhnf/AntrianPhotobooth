@@ -12,7 +12,7 @@ const systemChannel = supabaseClient.channel('system-events', {
 });
 
 // Manage Prefix System
-let currentPrefix = localStorage.getItem('adminTicketPrefix') || 'PB';
+let currentPrefix = 'PB';
 
 // ============================================
 // Initialization
@@ -22,7 +22,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const user = await checkAuth();
     if (!user) return;
 
+    // Load prefix from database
+    await loadPrefixFromDB();
     document.getElementById('admin-prefix').value = currentPrefix;
+
     await loadInitialData();
     subscribeToUpdates();
     initPrefixSystem();
@@ -31,6 +34,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ============================================
 // Prefix System
 // ============================================
+async function loadPrefixFromDB() {
+    try {
+        const { data, error } = await supabaseClient
+            .from('settings')
+            .select('value')
+            .eq('key', 'ticket_prefix')
+            .single();
+        if (!error && data) {
+            currentPrefix = data.value;
+        }
+    } catch (e) {
+        console.error('Failed to load prefix from DB:', e);
+    }
+}
+
 function initPrefixSystem() {
     systemChannel.on('broadcast', { event: 'request_prefix' }, () => {
         systemChannel.send({
@@ -43,16 +61,31 @@ function initPrefixSystem() {
     systemChannel.subscribe();
 }
 
-function changePrefix(newPrefix) {
+async function changePrefix(newPrefix) {
     if (!newPrefix) return;
     currentPrefix = newPrefix;
-    localStorage.setItem('adminTicketPrefix', newPrefix);
+
+    // 1. Persist to database (source of truth for all devices)
+    try {
+        const { error } = await supabaseClient
+            .from('settings')
+            .update({ value: newPrefix, updated_at: new Date().toISOString() })
+            .eq('key', 'ticket_prefix');
+        if (error) throw error;
+    } catch (e) {
+        console.error('Failed to save prefix to DB:', e);
+        showPopup("Error", "Gagal menyimpan kode tiket ke server: " + e.message, true);
+        return;
+    }
+
+    // 2. Broadcast for instant update to already-open customer pages
     systemChannel.send({
         type: 'broadcast',
         event: 'update_prefix',
         payload: { prefix: newPrefix }
     });
-    showPopup("Info", `Kode tiket berhasil diubah menjadi ${newPrefix}. Pelanggan yang sedang membuka web otomatis menggunakan kode ini.`);
+
+    showPopup("Info", `Kode tiket berhasil diubah menjadi ${newPrefix}. Semua pelanggan (termasuk yang baru membuka web) akan otomatis menggunakan kode ini.`);
 }
 
 // ============================================
