@@ -104,6 +104,16 @@
         <button onclick="submitQueue()" class="neo-button w-full mt-8 bg-neoCyan text-black font-black py-4 uppercase tracking-widest text-xl">
             Ambil Tiket
         </button>
+
+        <!-- LACAK TIKET -->
+        <div class="neo-card p-4 mt-8 bg-neoPink shadow-[4px_4px_0px_0px_#000]">
+            <h3 class="font-black uppercase tracking-tight mb-2">Kehilangan Tiket?</h3>
+            <p class="text-xs md:text-sm font-bold mb-3 leading-tight">Lupa nomor tiket? Masukkan <b>Nama Lengkap</b> atau <b>Nomor Tiket</b> Anda untuk melacak kembali.</p>
+            <div class="flex gap-2">
+                <input type="text" id="input-lacak" class="flex-1 border-4 border-black p-2 font-bold uppercase text-sm" placeholder="Nama atau PB-XXX">
+                <button onclick="lacakTiket()" class="bg-black text-white font-bold uppercase px-4 py-2 hover:bg-gray-800 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)] active:translate-y-1 active:shadow-none">Lacak</button>
+            </div>
+        </div>
     </div>
 
     <!-- SECTION 2: TIKET ANTRIAN -->
@@ -265,7 +275,6 @@
                 
                 // Save to localStorage
                 localStorage.setItem('myQueueId', myQueueId);
-                localStorage.setItem('myTicketInfo', JSON.stringify({ nama, kelas }));
                 
                 // Track status locally
                 myTicketStatuses = {};
@@ -437,7 +446,6 @@
 
         function resetApp() {
             localStorage.removeItem('myQueueId');
-            localStorage.removeItem('myTicketInfo');
             
             if (realtimeChannel) {
                 supabaseClient.removeChannel(realtimeChannel);
@@ -450,6 +458,7 @@
             document.getElementById('input-nama').value = '';
             document.getElementById('input-kelas').value = '';
             document.getElementById('input-alamat').value = '';
+            document.getElementById('input-lacak').value = '';
             
             // Reset quantities
             Object.keys(bgQuantities).forEach(id => {
@@ -465,8 +474,6 @@
             document.getElementById('ticket-section').classList.remove('hidden');
             document.getElementById('ticket-items').innerHTML = '<div class="text-center font-bold">Memulihkan tiket Anda...</div>';
             
-            const savedInfo = JSON.parse(localStorage.getItem('myTicketInfo') || '{}');
-            
             const { data, error } = await supabaseClient
                 .from('queues')
                 .select('*, backgrounds(nama_background)')
@@ -474,11 +481,14 @@
                 .in('status', ['menunggu', 'dipanggil', 'ditunda']);
                 
             if (error || !data || data.length === 0) {
+                alert(`Antrian ${queueId} tidak ditemukan, dibatalkan, atau sudah selesai.`);
                 resetApp();
                 return;
             }
 
             myQueueId = queueId;
+            localStorage.setItem('myQueueId', myQueueId); // Re-save if from lacakTiket
+
             myTicketStatuses = {};
             data.forEach(row => {
                 myTicketStatuses[row.background_id] = {
@@ -490,12 +500,68 @@
                 };
             });
 
-            document.getElementById('ticket-user-info').textContent = `${savedInfo.nama || ''} - ${savedInfo.kelas || ''}`;
+            const nama = data[0].nama_lengkap || '';
+            const kelas = data[0].kelas || '';
+            document.getElementById('ticket-user-info').textContent = `${nama} - ${kelas}`;
             document.getElementById('ticket-number').textContent = myQueueId;
             
             await fetchWaitingQueues();
             renderTicketStatuses();
             subscribeMyTicket();
+        }
+
+        async function lacakTiket() {
+            const input = document.getElementById('input-lacak').value.trim();
+            if (input.length < 3) {
+                alert("Masukkan minimal 3 huruf/angka untuk mencari.");
+                return;
+            }
+
+            const btn = event.currentTarget;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '...';
+            btn.disabled = true;
+
+            let query = supabaseClient
+                .from('queues')
+                .select('nomor_antrian, nama_lengkap, kelas')
+                .in('status', ['menunggu', 'dipanggil', 'ditunda']);
+
+            if (input.toUpperCase().startsWith('PB-')) {
+                query = query.eq('nomor_antrian', input.toUpperCase());
+            } else {
+                query = query.ilike('nama_lengkap', `%${input}%`);
+            }
+
+            const { data, error } = await query;
+            
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+
+            if (error || !data || data.length === 0) {
+                alert("Antrian tidak ditemukan. Pastikan ejaan nama benar dan antrian belum selesai.");
+                return;
+            }
+
+            // Grup data berdasarkan nomor_antrian (karena 1 nomor bisa punya bbrp background)
+            const uniqueTickets = [];
+            const seen = new Set();
+            data.forEach(r => {
+                if(!seen.has(r.nomor_antrian)) {
+                    seen.add(r.nomor_antrian);
+                    uniqueTickets.push(r);
+                }
+            });
+
+            if (uniqueTickets.length > 1) {
+                let msg = "Ditemukan beberapa tiket dengan nama tersebut:\n\n";
+                uniqueTickets.forEach(t => msg += `• ${t.nomor_antrian} : ${t.nama_lengkap} (${t.kelas})\n`);
+                msg += "\nSilakan ketik NOMOR TIKET yang tepat di kolom pencarian.";
+                alert(msg);
+                return;
+            }
+
+            restoreQueue(uniqueTickets[0].nomor_antrian);
         }
     </script>
 </body>
