@@ -148,6 +148,13 @@
         let allWaitingQueues = [];
         let notifiedStates = {};
 
+        // Register Service Worker for Mobile Notifications
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then(reg => {
+                console.log('Service Worker terdaftar untuk Notifikasi HP');
+            }).catch(e => console.error(e));
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             requestNotificationPermission();
             await loadBackgrounds();
@@ -381,9 +388,25 @@
                 .subscribe();
         }
 
-        function showNotification(title, body) {
+        async function showNotification(title, body) {
+            // Getar HP kencang (jika didukung)
+            if ('vibrate' in navigator) {
+                navigator.vibrate([500, 200, 500, 200, 1000]);
+            }
+
+            // Notifikasi Asli Sistem OS HP (Seperti WA)
             if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification(title, { body: body });
+                try {
+                    const reg = await navigator.serviceWorker.ready;
+                    reg.showNotification(title, {
+                        body: body,
+                        icon: 'https://cdn-icons-png.flaticon.com/512/1041/1041916.png', // Ikon lonceng
+                        vibrate: [500, 200, 500, 200, 1000],
+                        requireInteraction: true // Notif diam sampai diklik
+                    });
+                } catch(e) {
+                    new Notification(title, { body: body });
+                }
             }
 
             const toast = document.createElement('div');
