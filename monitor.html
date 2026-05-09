@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Antrian - Photobooth</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bgLight: '#e4e4e7', 
+                        neoYellow: '#fde047',
+                        neoCyan: '#67e8f9',
+                        neoPink: '#f9a8d4',
+                        neoGreen: '#86efac',
+                    },
+                    fontFamily: {
+                        sans: ['Space Grotesk', 'sans-serif'],
+                        mono: ['Space Mono', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: var(--tw-colors-bgLight, #e4e4e7);
+            color: #000;
+            background-image: radial-gradient(#000 2px, transparent 2px);
+            background-size: 30px 30px;
+        }
+        .neo-button {
+            border: 4px solid #000;
+            box-shadow: 8px 8px 0px 0px #000;
+            transition: all 0.1s ease-in-out;
+        }
+        .neo-button:hover {
+            transform: translate(-4px, -4px);
+            box-shadow: 12px 12px 0px 0px #000;
+        }
+        .neo-button:active {
+            transform: translate(4px, 4px);
+            box-shadow: 0px 0px 0px 0px #000;
+        }
+        .neo-card {
+            background-color: #fff;
+            border: 4px solid #000;
+            box-shadow: 8px 8px 0px 0px #000;
+            transition: all 0.2s ease;
+        }
+        
+        .calling-highlight {
+            background-color: #fde047 !important; 
+            transform: scale(1.02);
+            box-shadow: 16px 16px 0px 0px #000 !important;
+            z-index: 10;
+        }
+        
+        .calling-highlight .number-display {
+            text-shadow: 4px 4px 0px #fff;
+            transform: scale(1.1);
+        }
+        
+        .number-display {
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen lg:h-screen lg:overflow-hidden">
+
+    <script src="shared/config.js"></script>
+
+    <!-- INIT OVERLAY -->
+    <div id="init-overlay" class="fixed inset-0 z-50 bg-bgLight flex items-center justify-center p-4 bg-[radial-gradient(#000_2px,transparent_2px)] bg-[size:30px_30px]">
+        <button onclick="startMonitor()" class="neo-button bg-neoCyan text-black font-black text-2xl md:text-5xl py-6 px-8 md:py-8 md:px-16 uppercase tracking-tight text-center w-full max-w-2xl">
+            Mulai Monitor<br>
+            <span class="font-mono text-sm md:text-lg mt-2 block border-t-4 border-black pt-2">& Aktifkan Suara</span>
+        </button>
+    </div>
+
+    <!-- HEADER -->
+    <header class="p-2 md:p-3 md:px-6 flex flex-col lg:flex-row justify-between items-center lg:items-end border-b-4 border-black bg-white shadow-[0px_4px_0px_0px_#000] z-20 gap-2">
+        <div class="text-center lg:text-left w-full lg:w-auto">
+            <h1 class="text-2xl md:text-3xl lg:text-4xl font-black uppercase tracking-tighter leading-none">
+                Antrian<span class="bg-black text-white px-2 lg:ml-2 inline-block lg:inline mt-1 lg:mt-0 pb-1">Photobooth</span>
+            </h1>
+        </div>
+        <div class="text-center lg:text-right border-t-4 lg:border-t-0 lg:border-l-4 border-black pt-2 lg:pt-0 lg:pl-4 w-full lg:w-auto">
+            <div id="clock" class="font-mono text-xl md:text-2xl font-bold tracking-widest bg-neoYellow border-2 border-black px-2 py-0.5 shadow-[2px_2px_0px_0px_#000] inline-block mb-1">00:00:00</div>
+            <div id="date" class="font-bold uppercase tracking-wider block text-xs md:text-sm">Senin, 1 Jan 2024</div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 w-full max-w-[1920px] mx-auto p-4 md:p-8 z-10 flex flex-col lg:flex-row items-stretch justify-center gap-6 md:gap-8 lg:overflow-hidden">
+        
+        <!-- BACKGROUNDS GRID -->
+        <div id="monitor-columns" class="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 items-stretch flex-1 w-full h-full overflow-y-auto lg:overflow-hidden">
+            <!-- Rendered via JS -->
+        </div>
+
+        <!-- DELAYED SIDEBAR -->
+        <div id="delayed-container" class="hidden w-full lg:w-[200px] xl:w-[240px] flex-shrink-0 flex flex-col bg-neoYellow border-4 border-black p-0 h-full lg:max-h-full overflow-hidden shadow-[4px_4px_0px_0px_#000]">
+            <div class="bg-black text-white font-black uppercase p-2 text-base xl:text-lg text-center border-b-4 border-black tracking-wider">
+                DITUNDA
+            </div>
+            <div class="bg-white border-b-4 border-black font-bold uppercase p-1.5 text-[0.65rem] xl:text-xs text-center shadow-[0px_4px_0px_0px_#000] z-10 leading-tight">
+                Lapor petugas
+            </div>
+            <div class="flex-1 overflow-hidden relative bg-bgLight">
+                <div class="absolute inset-0 p-3 overflow-y-auto space-y-2" id="delayed-list-content">
+                    <!-- JS fills this -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="p-2 text-center border-t-4 border-black font-mono font-bold bg-white text-xs md:text-sm uppercase tracking-wider shadow-[0px_-4px_0px_0px_#000] z-20 mt-auto flex-shrink-0">
+        Sistem menggunakan Smart Queue. Nomor Anda mungkin dilompati saat sedang foto di background lain.
+    </footer>
+
+    <script>
+        let backgrounds = [];
+        let currentCalled = {}; 
+        let nextInLine = {};
+        let delayedQueues = [];
+        let isAudioEnabled = false;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateClock();
+            setInterval(updateClock, 1000);
+        });
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').textContent = now.toLocaleTimeString('id-ID');
+            document.getElementById('date').textContent = now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        }
+
+        async function startMonitor() {
+            document.getElementById('init-overlay').classList.add('hidden');
+            playNotificationSound();
+            isAudioEnabled = true;
+
+            await loadData();
+            subscribeToUpdates();
+        }
+
+        async function loadData() {
+            const { data: bgs, error: bgError } = await supabaseClient.from('backgrounds').select('*').order('id');
+            if (bgError) return console.error(bgError);
+            backgrounds = bgs;
+
+            const { data: queues, error: qError } = await supabaseClient
+                .from('queues')
+                .select('*')
+                .in('status', ['dipanggil', 'ditunda', 'menunggu'])
+                .order('created_at', { ascending: true });
+            
+            if (qError) return console.error(qError);
+            
+            backgrounds.forEach(bg => {
+                const bgQs = queues.filter(q => q.background_id === bg.id);
+                const called = bgQs.find(q => q.status === 'dipanggil');
+                currentCalled[bg.id] = called || null;
+
+                const next = bgQs.find(q => q.status === 'menunggu');
+                nextInLine[bg.id] = next || null;
+            });
+
+            delayedQueues = queues.filter(q => q.status === 'ditunda');
+
+            renderColumns();
+            renderDelayed();
+        }
+
+        function renderColumns() {
+            const container = document.getElementById('monitor-columns');
+            container.innerHTML = backgrounds.map((bg, index) => {
+                const called = currentCalled[bg.id];
+                const num = called ? called.nomor_antrian : '---';
+                
+                return `
+                <div id="card-bg-${bg.id}" class="neo-card rounded-none p-6 flex flex-col items-center justify-center min-h-[300px] md:min-h-[400px] lg:h-full relative w-full h-full">
+                    
+                    <div class="absolute top-0 left-0 w-full p-2 md:p-4 border-b-4 border-black bg-white text-center z-10">
+                        <h2 class="text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black tracking-tight uppercase truncate px-2">
+                            ${bg.nama_background}
+                        </h2>
+                    </div>
+                    
+                    <div class="mt-14 md:mt-20 text-sm md:text-xl font-mono font-bold mb-2 md:mb-3 tracking-widest uppercase border-b-2 border-black pb-1">Nomor Antrian</div>
+                    
+                    <div id="num-bg-${bg.id}" class="number-display text-6xl sm:text-7xl md:text-[6rem] lg:text-5xl xl:text-6xl 2xl:text-[7rem] whitespace-nowrap font-black tracking-tighter text-black leading-none mb-4 md:mb-6 transition-all duration-300">
+                        ${num}
+                    </div>
+
+                    <div id="name-bg-${bg.id}" class="text-lg md:text-2xl lg:text-3xl font-bold uppercase bg-black text-white px-2 md:px-4 py-1 md:py-2 text-center w-[90%] md:w-full leading-tight border-4 border-black transition-all duration-300 ${called ? '' : 'opacity-0 scale-95'}">
+                        ${called ? called.nama_lengkap : '-'}
+                    </div>
+                    
+                    <div id="kelas-bg-${bg.id}" class="text-sm md:text-lg font-mono font-bold uppercase bg-white text-black border-4 border-black border-t-0 px-2 md:px-4 py-1 text-center w-[80%] md:w-3/4 leading-tight shadow-[4px_4px_0px_0px_#000] transition-all duration-300 mb-8 ${called ? '' : 'opacity-0 scale-95'}">
+                        ${called ? 'KLS: ' + called.kelas : '-'}
+                    </div>
+
+                    <div id="msg-bg-${bg.id}" class="absolute bottom-12 bg-neoPink border-2 md:border-4 border-black px-4 md:px-6 py-2 md:py-3 shadow-[4px_4px_0px_0px_#000] md:shadow-[6px_6px_0px_0px_#000] text-sm md:text-xl lg:text-2xl font-black uppercase tracking-widest opacity-0 transition-all duration-300 z-20 pointer-events-none transform translate-y-4">
+                        SILAKAN MASUK
+                    </div>
+
+                    <div class="absolute bottom-0 left-0 w-full bg-neoYellow border-t-4 border-black p-2 md:p-3 text-center text-xs md:text-sm font-bold uppercase flex justify-center items-center gap-2" id="next-bg-${bg.id}">
+                        NEXT: ${nextInLine[bg.id] ? `<span class="font-black text-sm md:text-base">${nextInLine[bg.id].nomor_antrian}</span> <span class="truncate max-w-[150px]">(${nextInLine[bg.id].nama_lengkap})</span>` : '-'}
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function subscribeToUpdates() {
+            supabaseClient.channel('monitor-queues')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'queues' }, payload => {
+                    const newRecord = payload.new && Object.keys(payload.new).length > 0 ? payload.new : payload.old;
+                    const eventType = payload.eventType;
+                    
+                    if (eventType === 'UPDATE') {
+                        // Handle Dipanggil logic
+                        if (newRecord.status === 'dipanggil') {
+                            currentCalled[newRecord.background_id] = newRecord;
+                            updateColumnUI(newRecord.background_id, newRecord.nomor_antrian, true, newRecord);
+                        } 
+                        else if (newRecord.status === 'selesai' || newRecord.status === 'batal' || newRecord.status === 'ditunda' || newRecord.status === 'menunggu') {
+                            const current = currentCalled[newRecord.background_id];
+                            if (current && current.id === newRecord.id) {
+                                currentCalled[newRecord.background_id] = null;
+                                updateColumnUI(newRecord.background_id, '---', false, null);
+                            }
+                        }
+
+                        // Handle Ditunda logic
+                        if (newRecord.status === 'ditunda') {
+                            const existingIdx = delayedQueues.findIndex(q => q.id === newRecord.id);
+                            if (existingIdx === -1) {
+                                delayedQueues.push(newRecord);
+                            } else {
+                                delayedQueues[existingIdx] = newRecord;
+                            }
+                        } else {
+                            delayedQueues = delayedQueues.filter(q => q.id !== newRecord.id);
+                        }
+                        renderDelayed();
+                    }
+
+                    // Always refetch NEXT IN LINE for this background on any change
+                    if (newRecord && newRecord.background_id) {
+                        fetchNextInLine(newRecord.background_id);
+                    }
+                })
+                .subscribe();
+        }
+
+        async function fetchNextInLine(bgId) {
+            const { data, error } = await supabaseClient
+                .from('queues')
+                .select('*')
+                .eq('background_id', bgId)
+                .eq('status', 'menunggu')
+                .order('created_at', { ascending: true })
+                .limit(1)
+                .maybeSingle();
+            
+            const nextEl = document.getElementById(`next-bg-${bgId}`);
+            if (!nextEl) return;
+
+            if (data) {
+                nextInLine[bgId] = data;
+                nextEl.innerHTML = `NEXT: <span class="font-black text-sm md:text-base">${data.nomor_antrian}</span> <span class="truncate max-w-[200px] xl:max-w-[250px]">(${data.nama_lengkap})</span>`;
+            } else {
+                nextInLine[bgId] = null;
+                nextEl.innerHTML = `NEXT: -`;
+            }
+        }
+
+        function renderDelayed() {
+            const container = document.getElementById('delayed-container');
+            const listContent = document.getElementById('delayed-list-content');
+            
+            if (delayedQueues.length === 0) {
+                container.classList.add('hidden');
+                return;
+            }
+
+            // Deduplicate by nomor_antrian
+            const uniqueDelayed = [];
+            delayedQueues.forEach(q => {
+                if (!uniqueDelayed.find(u => u.nomor_antrian === q.nomor_antrian)) {
+                    uniqueDelayed.push(q);
+                }
+            });
+
+            listContent.innerHTML = uniqueDelayed.map(q => 
+                `<div class="border-2 border-black p-1.5 bg-white shadow-[2px_2px_0px_0px_#000] flex flex-col leading-tight">
+                    <span class="font-black text-lg tracking-tighter">${q.nomor_antrian}</span>
+                    <span class="font-bold text-[0.65rem] uppercase text-gray-700 truncate">${q.nama_lengkap}</span>
+                </div>`
+            ).join('');
+
+            container.classList.remove('hidden');
+        }
+
+        function updateColumnUI(bgId, number, isJustCalled, record) {
+            const cardEl = document.getElementById(`card-bg-${bgId}`);
+            const numEl = document.getElementById(`num-bg-${bgId}`);
+            const msgEl = document.getElementById(`msg-bg-${bgId}`);
+            const nameEl = document.getElementById(`name-bg-${bgId}`);
+            const kelasEl = document.getElementById(`kelas-bg-${bgId}`);
+            
+            if (!cardEl) return;
+
+            numEl.textContent = number;
+
+            if (record && isJustCalled) {
+                nameEl.textContent = record.nama_lengkap;
+                kelasEl.textContent = 'KLS: ' + record.kelas;
+                nameEl.classList.remove('opacity-0', 'scale-95');
+                kelasEl.classList.remove('opacity-0', 'scale-95');
+            } else if (!isJustCalled) {
+                nameEl.classList.add('opacity-0', 'scale-95');
+                kelasEl.classList.add('opacity-0', 'scale-95');
+            }
+
+            if (isJustCalled) {
+                if (isAudioEnabled) playNotificationSound();
+
+                cardEl.classList.add('calling-highlight');
+                msgEl.classList.remove('opacity-0', 'translate-y-4');
+                
+                setTimeout(() => {
+                    cardEl.classList.remove('calling-highlight');
+                    msgEl.classList.add('opacity-0', 'translate-y-4');
+                }, 5000);
+            }
+        }
+    </script>
+</body>
+</html>
