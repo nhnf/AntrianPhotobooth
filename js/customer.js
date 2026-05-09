@@ -436,6 +436,8 @@ function subscribeMyTicket() {
 // Notifications
 // ============================================
 async function showNotification(title, body) {
+    const fullTitle = "Antrian Photobooth: " + title;
+    
     // Vibrate
     if ('vibrate' in navigator) {
         navigator.vibrate([500, 200, 500, 200, 1000]);
@@ -446,7 +448,7 @@ async function showNotification(title, body) {
         const logoUrl = new URL('logo-mm.png', self.location.origin + self.location.pathname.replace(/\/[^/]*$/, '/')).href;
         try {
             const reg = await navigator.serviceWorker.ready;
-            reg.showNotification(title, {
+            reg.showNotification(fullTitle, {
                 body: body,
                 icon: logoUrl,
                 badge: logoUrl,
@@ -454,7 +456,7 @@ async function showNotification(title, body) {
                 requireInteraction: true
             });
         } catch (e) {
-            new Notification(title, { 
+            new Notification(fullTitle, { 
                 body: body, 
                 icon: logoUrl, 
                 badge: logoUrl 
