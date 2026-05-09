@@ -1,5 +1,5 @@
 // ============================================
-// Supabase Configuration - AntriPhotobooth
+// Supabase Configuration — AntriPhotobooth
 // ============================================
 
 const SUPABASE_URL = 'https://mkxwbobcptdqnntqgzdl.supabase.co';
@@ -7,6 +7,22 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 // Initialize Supabase client
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ============================================
+// Constants
+// ============================================
+const HARGA_PER_FOTO = 40000;
+const HARGA_PIGURA = 35000;
+
+const STATUS = {
+    MENUNGGU: 'menunggu',
+    DIPANGGIL: 'dipanggil',
+    DITUNDA: 'ditunda',
+    SELESAI: 'selesai',
+    BATAL: 'batal'
+};
+
+const ACTIVE_STATUSES = [STATUS.MENUNGGU, STATUS.DIPANGGIL, STATUS.DITUNDA];
 
 // ============================================
 // Realtime subscription helper
@@ -69,22 +85,37 @@ function formatTime(timestamp) {
     });
 }
 
+function formatCurrency(amount) {
+    return 'Rp ' + amount.toLocaleString('id-ID');
+}
+
 function getStatusBadgeClass(status) {
     switch(status) {
-        case 'menunggu': return 'badge-waiting';
-        case 'dipanggil': return 'badge-called';
-        case 'selesai': return 'badge-done';
-        case 'batal': return 'badge-cancelled';
+        case STATUS.MENUNGGU: return 'badge-waiting';
+        case STATUS.DIPANGGIL: return 'badge-called';
+        case STATUS.SELESAI: return 'badge-done';
+        case STATUS.BATAL: return 'badge-cancelled';
         default: return '';
     }
 }
 
 function getStatusText(status) {
     switch(status) {
-        case 'menunggu': return '⏳ Menunggu';
-        case 'dipanggil': return '📢 Dipanggil';
-        case 'selesai': return '✅ Selesai';
-        case 'batal': return '❌ Batal';
+        case STATUS.MENUNGGU: return '⏳ Menunggu';
+        case STATUS.DIPANGGIL: return '📢 Dipanggil';
+        case STATUS.SELESAI: return '✅ Selesai';
+        case STATUS.BATAL: return '❌ Batal';
         default: return status;
     }
+}
+
+/**
+ * Sanitize user input — strip HTML tags, trim, and limit length.
+ * @param {string} input
+ * @param {number} maxLength
+ * @returns {string}
+ */
+function sanitizeInput(input, maxLength = 100) {
+    if (!input) return '';
+    return input.replace(/<[^>]*>/g, '').trim().slice(0, maxLength);
 }

@@ -5,58 +5,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistem Antrian Photobooth</title>
+    <meta name="description" content="Portal Sistem Antrian Photobooth Mediatech An-Nur II — Akses halaman pelanggan, admin, dan monitor.">
+    <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <link
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
         rel="stylesheet">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        bgLight: '#e4e4e7',
-                        neoYellow: '#fde047',
-                        neoCyan: '#67e8f9',
-                        neoPink: '#f9a8d4',
-                    },
-                    fontFamily: {
-                        sans: ['Space Grotesk', 'sans-serif'],
-                        mono: ['Space Mono', 'monospace']
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        body {
-            background-color: var(--tw-colors-bgLight, #e4e4e7);
-            color: #000;
-            background-image: radial-gradient(#000 2px, transparent 2px);
-            background-size: 30px 30px;
-        }
-
-        .neo-button {
-            border: 4px solid #000;
-            box-shadow: 6px 6px 0px 0px #000;
-            transition: all 0.1s ease-in-out;
-        }
-
-        .neo-button:hover {
-            transform: translate(-4px, -4px);
-            box-shadow: 10px 10px 0px 0px #000;
-        }
-
-        .neo-button:active {
-            transform: translate(4px, 4px);
-            box-shadow: 0px 0px 0px 0px #000;
-        }
-
-        .neo-card {
-            background-color: #fff;
-            border: 4px solid #000;
-            box-shadow: 8px 8px 0px 0px #000;
-        }
-    </style>
+    <script src="shared/tailwind-config.js"></script>
+    <link rel="stylesheet" href="shared/styles.css">
 </head>
 
 <body class="flex items-center justify-center min-h-screen p-4">
@@ -83,21 +39,21 @@
             </p>
 
             <a href="customer.html"
-                class="neo-button block w-full py-4 px-6 bg-neoCyan font-black text-lg uppercase tracking-wide">
+                class="neo-button-lg block w-full py-4 px-6 bg-neoCyan font-black text-lg uppercase tracking-wide">
                 Halaman Pelanggan
                 <span class="block font-mono text-xs font-bold mt-1 lowercase border-t-2 border-black/30 pt-1">
                     ambil antrian</span>
             </a>
 
-            <a href="admin.html"
-                class="neo-button block w-full py-4 px-6 bg-neoYellow font-black text-lg uppercase tracking-wide">
+            <a href="login.html"
+                class="neo-button-lg block w-full py-4 px-6 bg-neoYellow font-black text-lg uppercase tracking-wide">
                 Dashboard Admin
                 <span class="block font-mono text-xs font-bold mt-1 lowercase border-t-2 border-black/30 pt-1">panggil &
                     kelola antrian</span>
             </a>
 
             <a href="monitor.html"
-                class="neo-button block w-full py-4 px-6 bg-neoPink font-black text-lg uppercase tracking-wide">
+                class="neo-button-lg block w-full py-4 px-6 bg-neoPink font-black text-lg uppercase tracking-wide">
                 Monitor Layar
                 <span
                     class="block font-mono text-xs font-normal mt-1 lowercase border-t-2 border-black/30 pt-1">tampilan

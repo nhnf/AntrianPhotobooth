@@ -1,0 +1,129 @@
+/* ============================================
+   Neo-Brutalist Design System — AntriPhotobooth
+   ============================================ */
+
+/* --- Base --- */
+body {
+    background-color: #e4e4e7;
+    color: #000;
+    background-image: radial-gradient(#000 2px, transparent 2px);
+    background-size: 30px 30px;
+}
+
+/* --- Neo-Brutalist Components --- */
+.neo-button {
+    border: 3px solid #000;
+    box-shadow: 4px 4px 0px 0px #000;
+    transition: all 0.1s ease-in-out;
+    cursor: pointer;
+}
+
+.neo-button:hover:not(:disabled) {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0px 0px #000;
+}
+
+.neo-button:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 0px 0px 0px 0px #000;
+}
+
+.neo-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #e5e7eb !important;
+    box-shadow: 2px 2px 0px 0px #000;
+    transform: none;
+}
+
+.neo-card {
+    background-color: #fff;
+    border: 4px solid #000;
+    box-shadow: 8px 8px 0px 0px #000;
+}
+
+/* --- Large Neo-Button variant (index, customer) --- */
+.neo-button-lg {
+    border: 4px solid #000;
+    box-shadow: 6px 6px 0px 0px #000;
+    transition: all 0.1s ease-in-out;
+    cursor: pointer;
+}
+
+.neo-button-lg:hover:not(:disabled) {
+    transform: translate(-4px, -4px);
+    box-shadow: 10px 10px 0px 0px #000;
+}
+
+.neo-button-lg:active:not(:disabled) {
+    transform: translate(4px, 4px);
+    box-shadow: 0px 0px 0px 0px #000;
+}
+
+/* --- Monitor-specific large variant --- */
+.neo-button-monitor {
+    border: 4px solid #000;
+    box-shadow: 8px 8px 0px 0px #000;
+    transition: all 0.1s ease-in-out;
+}
+
+.neo-button-monitor:hover {
+    transform: translate(-4px, -4px);
+    box-shadow: 12px 12px 0px 0px #000;
+}
+
+.neo-button-monitor:active {
+    transform: translate(4px, 4px);
+    box-shadow: 0px 0px 0px 0px #000;
+}
+
+/* --- Animations --- */
+@keyframes bounce-in {
+    0% { transform: scale(0.9); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.called-state {
+    background-color: #fde047 !important;
+    animation: bounce-in 0.5s ease-out;
+}
+
+/* Monitor: calling highlight */
+.neo-card-monitor {
+    background-color: #fff;
+    border: 4px solid #000;
+    box-shadow: 8px 8px 0px 0px #000;
+    transition: all 0.2s ease;
+}
+
+.calling-highlight {
+    background-color: #fde047 !important;
+    transform: scale(1.02);
+    box-shadow: 16px 16px 0px 0px #000 !important;
+    z-index: 10;
+}
+
+.calling-highlight .number-display {
+    text-shadow: 4px 4px 0px #fff;
+    transform: scale(1.1);
+}
+
+.number-display {
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* --- Scrollbar --- */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #fff;
+    border-left: 2px solid #000;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #000;
+    border-radius: 0;
+}
