@@ -1,18 +1,21 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monitor Antrian - Photobooth</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        bgLight: '#e4e4e7', 
+                        bgLight: '#e4e4e7',
                         neoYellow: '#fde047',
                         neoCyan: '#67e8f9',
                         neoPink: '#f9a8d4',
@@ -33,84 +36,102 @@
             background-image: radial-gradient(#000 2px, transparent 2px);
             background-size: 30px 30px;
         }
+
         .neo-button {
             border: 4px solid #000;
             box-shadow: 8px 8px 0px 0px #000;
             transition: all 0.1s ease-in-out;
         }
+
         .neo-button:hover {
             transform: translate(-4px, -4px);
             box-shadow: 12px 12px 0px 0px #000;
         }
+
         .neo-button:active {
             transform: translate(4px, 4px);
             box-shadow: 0px 0px 0px 0px #000;
         }
+
         .neo-card {
             background-color: #fff;
             border: 4px solid #000;
             box-shadow: 8px 8px 0px 0px #000;
             transition: all 0.2s ease;
         }
-        
+
         .calling-highlight {
-            background-color: #fde047 !important; 
+            background-color: #fde047 !important;
             transform: scale(1.02);
             box-shadow: 16px 16px 0px 0px #000 !important;
             z-index: 10;
         }
-        
+
         .calling-highlight .number-display {
             text-shadow: 4px 4px 0px #fff;
             transform: scale(1.1);
         }
-        
+
         .number-display {
             transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
     </style>
 </head>
+
 <body class="flex flex-col min-h-screen lg:h-screen lg:overflow-hidden">
 
     <script src="shared/config.js"></script>
 
     <!-- INIT OVERLAY -->
-    <div id="init-overlay" class="fixed inset-0 z-50 bg-bgLight flex items-center justify-center p-4 bg-[radial-gradient(#000_2px,transparent_2px)] bg-[size:30px_30px]">
-        <button onclick="startMonitor()" class="neo-button bg-neoCyan text-black font-black text-2xl md:text-5xl py-6 px-8 md:py-8 md:px-16 uppercase tracking-tight text-center w-full max-w-2xl">
+    <div id="init-overlay"
+        class="fixed inset-0 z-50 bg-bgLight flex items-center justify-center p-4 bg-[radial-gradient(#000_2px,transparent_2px)] bg-[size:30px_30px]">
+        <button onclick="startMonitor()"
+            class="neo-button bg-neoCyan text-black font-black text-2xl md:text-5xl py-6 px-8 md:py-8 md:px-16 uppercase tracking-tight text-center w-full max-w-2xl">
             Mulai Monitor<br>
             <span class="font-mono text-sm md:text-lg mt-2 block border-t-4 border-black pt-2">& Aktifkan Suara</span>
         </button>
     </div>
 
     <!-- HEADER -->
-    <header class="p-3 md:p-4 flex justify-between items-center border-b-4 border-black bg-white shrink-0 shadow-[0px_4px_0px_0px_#000] z-20">
+    <header
+        class="p-3 md:p-4 flex justify-between items-center border-b-4 border-black bg-white shrink-0 shadow-[0px_4px_0px_0px_#000] z-20">
         <div class="flex items-center gap-3 md:gap-4">
             <img src="logo-mm.png" alt="Logo" class="h-8 md:h-12 hidden sm:block">
             <div>
-                <h1 class="text-2xl md:text-4xl font-black uppercase tracking-tighter leading-none flex items-center gap-2 text-black">
+                <h1
+                    class="text-2xl md:text-4xl font-black uppercase tracking-tighter leading-none flex items-center gap-2 text-black">
                     <img src="logo-mm.png" alt="Logo" class="h-6 sm:hidden">
                     Status Antrian
                 </h1>
-                <p class="font-mono text-[10px] md:text-sm font-bold text-black bg-neoYellow border-2 border-black px-1 inline-block uppercase mt-0.5">Photobooth Mediatech An-Nur II</p>
+                <p
+                    class="font-mono text-[10px] md:text-sm font-bold text-black bg-neoYellow border-2 border-black px-1 inline-block uppercase mt-0.5">
+                    Photobooth Mediatech An-Nur II</p>
             </div>
         </div>
-        <div id="clock" class="font-mono text-xl md:text-3xl font-bold tracking-widest bg-black text-white px-3 py-1 border-2 border-black shadow-[2px_2px_0px_0px_var(--tw-colors-neoPink)]">00:00</div>
+        <div id="clock"
+            class="font-mono text-xl md:text-3xl font-bold tracking-widest bg-black text-white px-3 py-1 border-2 border-black shadow-[2px_2px_0px_0px_var(--tw-colors-neoPink)]">
+            00:00</div>
     </header>
 
     <!-- MAIN CONTENT -->
-    <main class="flex-1 w-full max-w-[1920px] mx-auto p-4 md:p-8 z-10 flex flex-col lg:flex-row items-stretch justify-center gap-6 md:gap-8 lg:overflow-hidden">
-        
+    <main
+        class="flex-1 w-full max-w-[1920px] mx-auto p-4 md:p-8 z-10 flex flex-col lg:flex-row items-stretch justify-center gap-6 md:gap-8 lg:overflow-hidden">
+
         <!-- BACKGROUNDS GRID -->
-        <div id="monitor-columns" class="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 items-stretch flex-1 w-full h-full overflow-y-auto lg:overflow-hidden">
+        <div id="monitor-columns"
+            class="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 items-stretch flex-1 w-full h-full overflow-y-auto lg:overflow-hidden">
             <!-- Rendered via JS -->
         </div>
 
         <!-- DELAYED SIDEBAR -->
-        <div id="delayed-container" class="hidden w-full lg:w-[200px] xl:w-[240px] flex-shrink-0 flex flex-col bg-neoYellow border-4 border-black p-0 h-full lg:max-h-full overflow-hidden shadow-[4px_4px_0px_0px_#000]">
-            <div class="bg-black text-white font-black uppercase p-2 text-base xl:text-lg text-center border-b-4 border-black tracking-wider">
+        <div id="delayed-container"
+            class="hidden w-full lg:w-[200px] xl:w-[240px] flex-shrink-0 flex flex-col bg-neoYellow border-4 border-black p-0 h-full lg:max-h-full overflow-hidden shadow-[4px_4px_0px_0px_#000]">
+            <div
+                class="bg-black text-white font-black uppercase p-2 text-base xl:text-lg text-center border-b-4 border-black tracking-wider">
                 DITUNDA
             </div>
-            <div class="bg-white border-b-4 border-black font-bold uppercase p-1.5 text-[0.65rem] xl:text-xs text-center shadow-[0px_4px_0px_0px_#000] z-10 leading-tight">
+            <div
+                class="bg-white border-b-4 border-black font-bold uppercase p-1.5 text-[0.65rem] xl:text-xs text-center shadow-[0px_4px_0px_0px_#000] z-10 leading-tight">
                 Lapor petugas
             </div>
             <div class="flex-1 overflow-hidden relative bg-bgLight">
@@ -122,13 +143,15 @@
     </main>
 
     <!-- FOOTER -->
-    <footer class="p-2 text-center border-t-4 border-black font-mono font-bold bg-white text-xs md:text-sm uppercase tracking-wider shadow-[0px_-4px_0px_0px_#000] z-20 mt-auto flex-shrink-0">
-        Sistem menggunakan Smart Queue. Nomor Anda mungkin dilompati saat sedang foto di background lain.
+    <footer
+        class="p-2 text-center border-t-4 border-black font-mono font-bold bg-white text-xs md:text-sm uppercase tracking-wider shadow-[0px_-4px_0px_0px_#000] z-20 mt-auto flex-shrink-0">
+        Harap tetap memantau antrian Anda, baik di HP maupun di monitor, agar tidak terlewat. apabila terlewat harap
+        menuju ke petugas.
     </footer>
 
     <script>
         let backgrounds = [];
-        let currentCalled = {}; 
+        let currentCalled = {};
         let nextInLine = {};
         let delayedQueues = [];
         let isAudioEnabled = false;
@@ -162,9 +185,9 @@
                 .select('*')
                 .in('status', ['dipanggil', 'ditunda', 'menunggu'])
                 .order('created_at', { ascending: true });
-            
+
             if (qError) return console.error(qError);
-            
+
             backgrounds.forEach(bg => {
                 const bgQs = queues.filter(q => q.background_id === bg.id);
                 const called = bgQs.find(q => q.status === 'dipanggil');
@@ -183,12 +206,12 @@
         function renderColumns() {
             const container = document.getElementById('monitor-columns');
             const colors = ['bg-neoCyan', 'bg-neoPink', 'bg-neoYellow', 'bg-neoGreen'];
-            
+
             container.innerHTML = backgrounds.map((bg, index) => {
                 const called = currentCalled[bg.id];
                 const num = called ? called.nomor_antrian : '---';
                 const color = colors[index % colors.length];
-                
+
                 return `
                 <div id="card-bg-${bg.id}" class="neo-card bg-white rounded-none p-6 flex flex-col items-center justify-center min-h-[300px] md:min-h-[400px] lg:h-full relative w-full h-full">
                     
@@ -229,13 +252,13 @@
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'queues' }, payload => {
                     const newRecord = payload.new && Object.keys(payload.new).length > 0 ? payload.new : payload.old;
                     const eventType = payload.eventType;
-                    
+
                     if (eventType === 'UPDATE') {
                         // Handle Dipanggil logic
                         if (newRecord.status === 'dipanggil') {
                             currentCalled[newRecord.background_id] = newRecord;
                             updateColumnUI(newRecord.background_id, newRecord.nomor_antrian, true, newRecord);
-                        } 
+                        }
                         else if (newRecord.status === 'selesai' || newRecord.status === 'batal' || newRecord.status === 'ditunda' || newRecord.status === 'menunggu') {
                             const current = currentCalled[newRecord.background_id];
                             if (current && current.id === newRecord.id) {
@@ -275,7 +298,7 @@
                 .order('created_at', { ascending: true })
                 .limit(1)
                 .maybeSingle();
-            
+
             const nextEl = document.getElementById(`next-bg-${bgId}`);
             if (!nextEl) return;
 
@@ -291,7 +314,7 @@
         function renderDelayed() {
             const container = document.getElementById('delayed-container');
             const listContent = document.getElementById('delayed-list-content');
-            
+
             if (delayedQueues.length === 0) {
                 container.classList.add('hidden');
                 return;
@@ -305,7 +328,7 @@
                 }
             });
 
-            listContent.innerHTML = uniqueDelayed.map(q => 
+            listContent.innerHTML = uniqueDelayed.map(q =>
                 `<div class="border-2 border-black p-1.5 bg-white shadow-[2px_2px_0px_0px_#000] flex flex-col leading-tight">
                     <span class="font-black text-lg tracking-tighter">${q.nomor_antrian}</span>
                     <span class="font-bold text-[0.65rem] uppercase text-gray-700 truncate">${q.nama_lengkap}</span>
@@ -321,7 +344,7 @@
             const msgEl = document.getElementById(`msg-bg-${bgId}`);
             const nameEl = document.getElementById(`name-bg-${bgId}`);
             const kelasEl = document.getElementById(`kelas-bg-${bgId}`);
-            
+
             if (!cardEl) return;
 
             numEl.textContent = number;
@@ -341,7 +364,7 @@
 
                 cardEl.classList.add('calling-highlight');
                 msgEl.classList.remove('opacity-0', 'translate-y-4');
-                
+
                 setTimeout(() => {
                     cardEl.classList.remove('calling-highlight');
                     msgEl.classList.add('opacity-0', 'translate-y-4');
@@ -350,4 +373,5 @@
         }
     </script>
 </body>
+
 </html>

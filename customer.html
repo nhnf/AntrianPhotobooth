@@ -1,18 +1,22 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ambil Antrian - Photobooth</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        bgLight: '#e4e4e7', 
+                        bgLight: '#e4e4e7',
                         neoYellow: '#fde047',
                         neoCyan: '#67e8f9',
                         neoPink: '#f9a8d4',
@@ -33,160 +37,231 @@
             background-image: radial-gradient(#000 2px, transparent 2px);
             background-size: 30px 30px;
         }
+
         .neo-button {
             border: 3px solid #000;
             box-shadow: 6px 6px 0px 0px #000;
             transition: all 0.1s ease-in-out;
         }
+
         .neo-button:hover {
             transform: translate(-2px, -2px);
             box-shadow: 8px 8px 0px 0px #000;
         }
+
         .neo-button:active {
             transform: translate(4px, 4px);
             box-shadow: 0px 0px 0px 0px #000;
         }
+
         .neo-card {
             background-color: #fff;
             border: 4px solid #000;
             box-shadow: 8px 8px 0px 0px #000;
         }
+
         .called-state {
-            background-color: #fde047 !important; /* neoYellow */
+            background-color: #fde047 !important;
+            /* neoYellow */
             animation: bounce-in 0.5s ease-out;
         }
+
         @keyframes bounce-in {
-            0% { transform: scale(0.9); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
+            0% {
+                transform: scale(0.9);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+
+            100% {
+                transform: scale(1);
+            }
         }
     </style>
 </head>
+
 <body class="flex flex-col p-4 md:p-8 max-w-md mx-auto relative min-h-screen pb-20">
 
     <!-- TOAST CONTAINER -->
-    <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-3 w-[90%] max-w-sm pointer-events-none"></div>
+    <div id="toast-container"
+        class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-3 w-[90%] max-w-sm pointer-events-none">
+    </div>
 
     <!-- CUSTOM POPUP MODAL -->
-    <div id="custom-popup" class="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-[100] flex items-center justify-center p-4 hidden transition-opacity duration-200">
-        <div class="bg-white border-4 border-black shadow-[8px_8px_0px_0px_#000] p-6 max-w-sm w-full transform transition-all duration-300 scale-95 opacity-0" id="popup-content">
-            <h2 id="popup-title" class="text-xl font-black uppercase tracking-tight border-b-4 border-black pb-1 mb-4 inline-block pr-4">Perhatian</h2>
+    <div id="custom-popup"
+        class="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-[100] flex items-center justify-center p-4 hidden transition-opacity duration-200">
+        <div class="bg-white border-4 border-black shadow-[8px_8px_0px_0px_#000] p-6 max-w-sm w-full transform transition-all duration-300 scale-95 opacity-0"
+            id="popup-content">
+            <h2 id="popup-title"
+                class="text-xl font-black uppercase tracking-tight border-b-4 border-black pb-1 mb-4 inline-block pr-4">
+                Perhatian</h2>
             <div id="popup-body" class="font-bold mb-6 text-sm leading-relaxed"></div>
-            <button onclick="closePopup()" class="w-full bg-neoCyan text-black font-black uppercase py-3 border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[2px_2px_0px_0px_#000] active:translate-y-1 active:shadow-none transition-all">Tutup</button>
+            <button onclick="closePopup()"
+                class="w-full bg-neoCyan text-black font-black uppercase py-3 border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[2px_2px_0px_0px_#000] active:translate-y-1 active:shadow-none transition-all">Tutup</button>
         </div>
     </div>
 
     <script src="shared/config.js"></script>
 
     <!-- SECTION 1: PILIH BACKGROUND -->
-    <div id="selection-section" class="flex-1 flex flex-col neo-card bg-white p-0 overflow-hidden w-full relative shadow-[8px_8px_0px_0px_#000]">
-        
-        <div class="w-full p-4 border-b-4 border-black bg-neoYellow text-black text-center shadow-[0px_4px_0px_0px_#000] z-10 relative flex flex-col items-center justify-center gap-1">
+    <div id="selection-section"
+        class="flex-1 flex flex-col neo-card bg-white p-0 overflow-hidden w-full relative shadow-[8px_8px_0px_0px_#000]">
+
+        <div
+            class="w-full p-4 border-b-4 border-black bg-neoYellow text-black text-center shadow-[0px_4px_0px_0px_#000] z-10 relative flex flex-col items-center justify-center gap-1">
             <div class="flex items-center justify-center gap-2">
                 <img src="logo-mm.png" alt="Logo" class="h-6">
-                <span class="font-black text-xs uppercase tracking-widest text-left leading-none">Mediatech<br>An-Nur II</span>
+                <span class="font-black text-xs uppercase tracking-widest text-left leading-none">Mediatech<br>An-Nur
+                    II</span>
             </div>
             <h1 class="text-3xl md:text-4xl font-black uppercase tracking-tighter mt-2">Tiket Antrian</h1>
         </div>
 
         <div class="p-6 flex-1 flex flex-col relative z-0">
-            
+
             <div class="text-center mb-6">
-                <p class="font-mono font-bold border-b-2 border-black inline-block px-2 text-sm uppercase">Pendaftaran Photobooth</p>
+                <p class="font-mono font-bold border-b-2 border-black inline-block px-2 text-sm uppercase">Pendaftaran
+                    Photobooth</p>
             </div>
 
-        <div class="space-y-5">
-            <div>
-                <label class="font-mono text-sm font-bold uppercase block mb-2 text-gray-700">Nama Lengkap</label>
-                <input type="text" id="input-nama" class="w-full border-2 border-black p-4 text-lg font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:translate-y-[2px]" placeholder="Contoh: Budi Santoso">
-            </div>
-            <div>
-                <label class="font-mono text-sm font-bold uppercase block mb-2 text-gray-700">Kelas</label>
-                <input type="text" id="input-kelas" class="w-full border-2 border-black p-4 text-lg font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:translate-y-[2px]" placeholder="Contoh: 12 IPA 1">
-            </div>
-            <div>
-                <label class="font-mono text-sm font-bold uppercase block mb-2 text-gray-700">Alamat</label>
-                <input type="text" id="input-alamat" class="w-full border-2 border-black p-4 text-lg font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:translate-y-[2px]" placeholder="Contoh: Malang">
-            </div>
-        </div>
-
-        <div class="flex items-center gap-4 my-8">
-            <div class="h-1 flex-1 bg-black"></div>
-            <div class="font-mono text-xs font-bold uppercase bg-black text-white px-3 py-1 tracking-widest shadow-[2px_2px_0px_0px_#f9a8d4]">PILIH BACKGROUND</div>
-            <div class="h-1 flex-1 bg-black"></div>
-        </div>
-        
-        <div id="loading-bgs" class="font-mono text-center font-bold text-gray-500 p-4 border-2 border-black border-dashed">MEMUAT PILIHAN...</div>
-        
-        <div id="bg-list" class="space-y-4">
-            <!-- Rendered via JS -->
-        </div>
-
-        <button onclick="submitQueue()" class="w-full mt-10 bg-black text-white hover:bg-neoCyan hover:text-black font-black py-5 uppercase tracking-widest text-xl border-4 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[4px] transition-all">
-            AMBIL TIKET
-        </button>
-
-        <!-- LACAK TIKET -->
-        <div class="mt-8 p-0 border-4 border-black bg-white overflow-hidden shadow-[6px_6px_0px_0px_#000]">
-            <div class="bg-neoYellow border-b-4 border-black p-3 shadow-[0px_4px_0px_0px_#000] z-10 relative">
-                <h3 class="font-black uppercase tracking-tight text-xl flex items-center justify-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                    Cari Tiket Lama
-                </h3>
-            </div>
-            <div class="p-5">
-                <p class="text-sm font-bold text-black mb-4 text-center">Lupa nomor tiket? Masukkan Nama atau Nomor Tiket untuk melacak.</p>
-                <div class="flex flex-col gap-2">
-                    <input type="text" id="input-lacak" class="flex-1 border-4 border-black p-3 font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all text-center" placeholder="Ketik di sini...">
-                    <button onclick="lacakTiket()" class="bg-black text-white font-black uppercase px-6 py-3 hover:bg-neoCyan hover:text-black transition-colors border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000]">Lacak</button>
+            <div class="space-y-5">
+                <div>
+                    <label class="font-mono text-sm font-bold uppercase block mb-2 text-gray-700">
+                        Nama Lengkap
+                        <span id="prefix-indicator"
+                            class="float-right bg-black text-white px-2 py-0.5 text-[10px] rounded-sm">KODE: PB</span>
+                    </label>
+                    <input type="text" id="input-nama"
+                        class="w-full border-2 border-black p-4 text-lg font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:translate-y-[2px]"
+                        placeholder="Contoh: Budi Santoso">
+                </div>
+                <div>
+                    <label class="font-mono text-sm font-bold uppercase block mb-2 text-gray-700">Kelas</label>
+                    <input type="text" id="input-kelas"
+                        class="w-full border-2 border-black p-4 text-lg font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:translate-y-[2px]"
+                        placeholder="Contoh: 12 IPA 1">
+                </div>
+                <div>
+                    <label class="font-mono text-sm font-bold uppercase block mb-2 text-gray-700">Alamat</label>
+                    <input type="text" id="input-alamat"
+                        class="w-full border-2 border-black p-4 text-lg font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:translate-y-[2px]"
+                        placeholder="Contoh: Malang">
                 </div>
             </div>
-        </div>
+
+            <div class="flex items-center gap-4 my-8">
+                <div class="h-1 flex-1 bg-black"></div>
+                <div
+                    class="font-mono text-xs font-bold uppercase bg-black text-white px-3 py-1 tracking-widest shadow-[2px_2px_0px_0px_#f9a8d4]">
+                    PILIH BACKGROUND</div>
+                <div class="h-1 flex-1 bg-black"></div>
+            </div>
+
+            <p class="text-center font-bold font-mono text-sm mb-4 uppercase text-gray-700">Foto berukuran 10R</p>
+
+            <div id="loading-bgs"
+                class="font-mono text-center font-bold text-gray-500 p-4 border-2 border-black border-dashed">MEMUAT
+                PILIHAN...</div>
+
+            <div id="bg-list" class="space-y-4">
+                <!-- Rendered via JS -->
+            </div>
+
+            <button onclick="submitQueue()"
+                class="w-full mt-10 bg-neoCyan text-black hover:bg-black hover:text-white font-black py-5 uppercase tracking-widest text-xl border-4 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[4px] transition-all">
+                AMBIL TIKET
+            </button>
+
+            <!-- LACAK TIKET -->
+            <div class="mt-8 p-0 border-4 border-black bg-white overflow-hidden shadow-[6px_6px_0px_0px_#000]">
+                <div class="bg-neoYellow border-b-4 border-black p-3 shadow-[0px_4px_0px_0px_#000] z-10 relative">
+                    <h3 class="font-black uppercase tracking-tight text-xl flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
+                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        Cari Tiket
+                    </h3>
+                </div>
+                <div class="p-5">
+                    <p class="text-sm font-bold text-black mb-4 text-center">Lupa nomor tiket? Masukkan Nama atau Nomor
+                        Tiket untuk melacak.</p>
+                    <div class="flex flex-col gap-2">
+                        <input type="text" id="input-lacak"
+                            class="flex-1 border-4 border-black p-3 font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all text-center"
+                            placeholder="PB-...">
+                        <button onclick="lacakTiket()"
+                            class="bg-black text-white font-black uppercase px-6 py-3 hover:bg-neoCyan hover:text-black transition-colors border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000]">Lacak</button>
+                    </div>
+                </div>
+            </div>
 
         </div> <!-- Tutup padding inner selection-section -->
     </div>
 
     <!-- SECTION 2: TIKET ANTRIAN -->
     <div id="ticket-section" class="flex-1 flex flex-col hidden mt-2">
-        <div class="neo-card bg-white p-0 mb-6 relative transition-colors duration-300 overflow-hidden w-full shadow-[8px_8px_0px_0px_#000]" id="ticket-card">
-            
-            <div class="w-full p-4 border-b-4 border-black bg-neoCyan text-black text-center shadow-[0px_4px_0px_0px_#000] z-10 relative flex flex-col items-center justify-center gap-1 mb-6">
+        <div class="neo-card bg-white p-0 mb-6 relative transition-colors duration-300 overflow-hidden w-full shadow-[8px_8px_0px_0px_#000]"
+            id="ticket-card">
+
+            <div
+                class="w-full p-4 border-b-4 border-black bg-neoCyan text-black text-center shadow-[0px_4px_0px_0px_#000] z-10 relative flex flex-col items-center justify-center gap-1 mb-6">
                 <div class="flex items-center justify-center gap-2">
                     <img src="logo-mm.png" alt="Logo" class="h-6">
-                    <span class="font-black uppercase tracking-widest text-xs text-left leading-none">Mediatech<br>An-Nur II</span>
+                    <span
+                        class="font-black uppercase tracking-widest text-xs text-left leading-none">Mediatech<br>An-Nur
+                        II</span>
                 </div>
             </div>
-            
+
             <div class="text-center pb-4">
-                <p class="font-mono text-xs font-bold uppercase bg-black text-white border-2 border-black inline-block px-3 py-1 mb-3 shadow-[2px_2px_0px_0px_#000]" id="ticket-user-info">--</p>
-                <div class="text-7xl md:text-8xl font-black tracking-tighter text-black" id="ticket-number">--</div>
+                <p class="font-mono text-sm font-bold uppercase bg-black text-white border-2 border-black inline-block px-3 py-1 mb-4 shadow-[4px_4px_0px_0px_#000] break-words whitespace-normal max-w-[90%]"
+                    id="ticket-user-info">--</p>
+                <div class="text-6xl md:text-7xl font-black tracking-tighter text-black mb-2" id="ticket-number">--
+                </div>
             </div>
-            
-            <div class="h-1 w-full bg-black my-6"></div>
-            
-            <div class="font-mono text-xs font-bold uppercase bg-black text-white px-2 py-1 tracking-widest inline-block mx-auto text-center mb-4 border-2 border-black shadow-[2px_2px_0px_0px_#fde047]">STATUS BACKGROUND</div>
-            
+
+            <!-- TOTAL HARGA DI TIKET -->
+            <div class="mx-6 mb-4 p-4 bg-neoYellow border-4 border-black shadow-[4px_4px_0px_0px_#000] text-center">
+                <div class="font-mono text-xs font-bold uppercase tracking-widest mb-1">Total Pembayaran</div>
+                <div id="ticket-total-price" class="text-3xl font-black tracking-tight">Rp 0</div>
+                <div id="ticket-total-qty" class="font-mono text-xs font-bold mt-1 text-gray-700">0 foto</div>
+            </div>
+
+            <div class="h-1 w-full bg-black my-4"></div>
+
+            <div
+                class="font-mono text-xs font-bold uppercase bg-black text-white px-2 py-1 tracking-widest inline-block mx-auto text-center mb-4 border-2 border-black shadow-[2px_2px_0px_0px_#fde047]">
+                STATUS BACKGROUND</div>
+
             <div id="ticket-items" class="space-y-4 text-left mt-2 px-6 pb-6">
                 <!-- Rendered via JS -->
             </div>
-            
+
         </div>
 
-        <p class="font-mono text-xs text-center font-bold px-4 text-black bg-neoYellow border-4 border-black p-3 shadow-[4px_4px_0px_0px_#000] my-4 leading-relaxed">
-            Sistem otomatis melompati Anda jika Anda sedang di background lain. Harap perhatikan TV!
-        </p>
+        <button onclick="downloadTicketImage()"
+            class="w-full mt-2 bg-neoGreen text-black border-4 border-black hover:bg-black hover:text-white transition-colors font-black py-4 uppercase tracking-widest text-lg shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-y-[6px]">
+            DOWNLOAD TIKET
+        </button>
 
-        <button onclick="resetApp()" class="w-full mt-2 bg-neoCyan text-black border-4 border-black hover:bg-black hover:text-white transition-colors font-black py-4 uppercase tracking-widest text-lg shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-y-[6px]">
+        <button onclick="resetApp()"
+            class="w-full mt-2 bg-neoCyan text-black border-4 border-black hover:bg-black hover:text-white transition-colors font-black py-4 uppercase tracking-widest text-lg shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-y-[6px]">
             BUAT ANTRIAN BARU
         </button>
     </div>
 
     <script>
+        const HARGA_PER_FOTO = 40000;
+        const HARGA_PIGURA = 35000;
         let backgrounds = [];
         let bgQuantities = {};
-        
-        let myQueueId = null; 
-        let myTicketStatuses = {}; 
+        let piguraQty = 0;
+
+        let myQueueId = null;
+        let myTicketStatuses = {};
         let realtimeChannel = null;
         let allWaitingQueues = [];
         let notifiedStates = {};
@@ -201,7 +276,7 @@
         document.addEventListener('DOMContentLoaded', async () => {
             requestNotificationPermission();
             await loadBackgrounds();
-            
+
             const savedQueueId = localStorage.getItem('myQueueId');
             if (savedQueueId) {
                 await restoreQueue(savedQueueId);
@@ -215,19 +290,59 @@
         }
 
         // Listen for admin wipe cache command
-        supabaseClient.channel('system-events')
-            .on('broadcast', { event: 'clear_cache' }, (payload) => {
-                showNotification("Sistem Di-reset", "Admin telah me-reset sesi antrian di HP ini.");
-                resetApp();
-            })
-            .subscribe();
+        let systemChannel;
+        function initSystemChannel() {
+            systemChannel = supabaseClient.channel('system-events');
+
+            systemChannel.on('broadcast', { event: 'clear_cache' }, (payload) => {
+                if (payload.payload.action === 'wipe') {
+                    localStorage.removeItem('myQueueId');
+                    localStorage.removeItem('myPiguraQty');
+                    location.reload();
+                }
+            });
+
+            systemChannel.on('broadcast', { event: 'update_prefix' }, (payload) => {
+                const newPrefix = payload.payload.prefix;
+                localStorage.setItem('customerTicketPrefix', newPrefix);
+
+                const indicator = document.getElementById('prefix-indicator');
+                if (indicator) indicator.textContent = 'KODE: ' + newPrefix;
+
+                const inputLacak = document.getElementById('input-lacak');
+                if (inputLacak) inputLacak.placeholder = newPrefix + '-...';
+            });
+
+            systemChannel.subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    // Minta prefix terbaru ke admin saat baru buka halaman
+                    setTimeout(() => {
+                        systemChannel.send({
+                            type: 'broadcast',
+                            event: 'request_prefix',
+                            payload: {}
+                        });
+                    }, 1000);
+                }
+            });
+        }
+        initSystemChannel();
+
+        // Set initial prefix display
+        const initialPrefix = localStorage.getItem('customerTicketPrefix') || 'PB';
+
+        const indicator = document.getElementById('prefix-indicator');
+        if (indicator) indicator.textContent = 'KODE: ' + initialPrefix;
+
+        const inputLacak = document.getElementById('input-lacak');
+        if (inputLacak) inputLacak.placeholder = initialPrefix + '-...';
 
         async function loadBackgrounds() {
             const { data, error } = await supabaseClient
                 .from('backgrounds')
                 .select('*')
                 .order('id');
-            
+
             const listEl = document.getElementById('bg-list');
             document.getElementById('loading-bgs').classList.add('hidden');
 
@@ -246,6 +361,7 @@
                 <div class="bg-white ${color} border-2 border-black p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all">
                     <div class="text-center md:text-left flex-1">
                         <h3 class="text-xl font-black uppercase tracking-tight">${bg.nama_background}</h3>
+                        <p class="font-mono text-xs font-bold text-gray-600 mt-1">Rp 40.000 / foto</p>
                     </div>
                     <div class="flex items-center bg-white border-2 border-black rounded-full overflow-hidden shrink-0">
                         <button onclick="changeQty(${bg.id}, -1)" class="w-12 h-10 bg-white hover:bg-gray-200 font-black text-xl flex items-center justify-center transition-colors border-r-2 border-black">-</button>
@@ -255,6 +371,33 @@
                 </div>
                 `;
             }).join('');
+
+            // Tambahkan opsi pigura dan area total harga
+            listEl.insertAdjacentHTML('afterend', `
+                <div class="flex items-center gap-4 my-8">
+                    <div class="h-1 flex-1 bg-black"></div>
+                    <div class="font-mono text-xs font-bold uppercase bg-black text-white px-3 py-1 tracking-widest shadow-[2px_2px_0px_0px_#67e8f9]">TAMBAHAN</div>
+                    <div class="h-1 flex-1 bg-black"></div>
+                </div>
+
+                <div class="bg-white hover:bg-neoGreen border-2 border-black p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all">
+                    <div class="text-center md:text-left flex-1">
+                        <h3 class="text-xl font-black uppercase tracking-tight">Pigura</h3>
+                        <p class="font-mono text-xs font-bold text-gray-600 mt-1">Rp 35.000 / pcs</p>
+                    </div>
+                    <div class="flex items-center bg-white border-2 border-black rounded-full overflow-hidden shrink-0">
+                        <button onclick="changePiguraQty(-1)" class="w-12 h-10 bg-white hover:bg-gray-200 font-black text-xl flex items-center justify-center transition-colors border-r-2 border-black">-</button>
+                        <span id="qty-pigura" class="font-mono font-black text-lg w-10 text-center flex items-center justify-center bg-white h-10">0</span>
+                        <button onclick="changePiguraQty(1)" class="w-12 h-10 bg-white hover:bg-gray-200 font-black text-xl flex items-center justify-center transition-colors border-l-2 border-black">+</button>
+                    </div>
+                </div>
+
+                <div id="total-price-box" class="mt-6 p-4 bg-neoYellow border-4 border-black shadow-[4px_4px_0px_0px_#000] text-center hidden">
+                    <div class="font-mono text-xs font-bold uppercase tracking-widest mb-1">Total Pembayaran</div>
+                    <div id="total-price" class="text-3xl font-black tracking-tight">Rp 0</div>
+                    <div id="total-qty-info" class="font-mono text-xs font-bold mt-1 text-gray-700"></div>
+                </div>
+            `);
         }
 
         function changeQty(bgId, delta) {
@@ -262,58 +405,105 @@
             if (bgQuantities[bgId] < 0) bgQuantities[bgId] = 0;
             if (bgQuantities[bgId] > 10) bgQuantities[bgId] = 10;
             document.getElementById(`qty-${bgId}`).textContent = bgQuantities[bgId];
+            updateTotalPrice();
+        }
+
+        function changePiguraQty(delta) {
+            piguraQty += delta;
+            if (piguraQty < 0) piguraQty = 0;
+            if (piguraQty > 20) piguraQty = 20;
+            document.getElementById('qty-pigura').textContent = piguraQty;
+            updateTotalPrice();
+        }
+
+        function updateTotalPrice() {
+            const totalFoto = Object.values(bgQuantities).reduce((sum, qty) => sum + qty, 0);
+            const hargaFoto = totalFoto * HARGA_PER_FOTO;
+            const hargaPigura = piguraQty * HARGA_PIGURA;
+            const totalHarga = hargaFoto + hargaPigura;
+            const priceBox = document.getElementById('total-price-box');
+            if (priceBox) {
+                if (totalFoto > 0 || piguraQty > 0) {
+                    priceBox.classList.remove('hidden');
+                    document.getElementById('total-price').textContent = 'Rp ' + totalHarga.toLocaleString('id-ID');
+                    let info = [];
+                    if (totalFoto > 0) info.push(totalFoto + ' foto');
+                    if (piguraQty > 0) info.push(piguraQty + ' pigura');
+                    document.getElementById('total-qty-info').textContent = info.join(' + ');
+                } else {
+                    priceBox.classList.add('hidden');
+                }
+            }
         }
 
         async function submitQueue() {
             const nama = document.getElementById('input-nama').value.trim();
             const kelas = document.getElementById('input-kelas').value.trim();
+            const alamat = document.getElementById('input-alamat').value.trim();
             const qtyInputs = document.querySelectorAll('.qty-val');
-            
+
             if (!nama || !kelas) {
                 return showPopup("Data Belum Lengkap", "Harap isi <b>Nama</b> dan <b>Kelas/Asal</b> Anda sebelum mengambil tiket.");
             }
 
             const selectedBgs = backgrounds.filter(bg => bgQuantities[bg.id] > 0);
-            
+
             if (selectedBgs.length === 0) {
                 return showPopup("Pilih Background", "Anda harus memilih minimal <b>satu background photobooth</b>!");
             }
 
             document.getElementById('selection-section').classList.add('hidden');
             document.getElementById('ticket-section').classList.remove('hidden');
-            document.getElementById('ticket-user-info').textContent = `${nama} - ${kelas}`;
+            document.getElementById('ticket-user-info').textContent = `${nama} - ${kelas} - ${alamat}`;
             document.getElementById('ticket-number').textContent = '...';
             document.getElementById('ticket-items').innerHTML = '<div class="text-center font-bold">Mendaftarkan ke server...</div>';
 
             try {
-                // Generate Master Number
-                const { data: qNum, error: rpcError } = await supabaseClient.rpc('generate_master_queue');
-                if (rpcError) throw rpcError;
+                // Generate Master Number — hitung dari jumlah tiket AKTIF (bukan batal) yang ada di database
+                const { data: existingTickets, error: countError } = await supabaseClient
+                    .from('queues')
+                    .select('nomor_antrian')
+                    .neq('status', 'batal');
 
-                myQueueId = qNum;
+                if (countError) throw countError;
 
-                const rowsToInsert = selectedBgs.map(bg => ({
+                const prefix = localStorage.getItem('customerTicketPrefix') || 'PB';
+
+                // Hitung jumlah nomor_antrian unik yang masih aktif KHUSUS untuk prefix ini
+                const uniqueNumbers = new Set(
+                    (existingTickets || [])
+                        .filter(t => t.nomor_antrian.startsWith(prefix + '-'))
+                        .map(t => t.nomor_antrian)
+                );
+                const nextNum = uniqueNumbers.size + 1;
+                const myQueueNumber = prefix + '-' + String(nextNum).padStart(3, '0');
+
+                myQueueId = myQueueNumber;
+
+                const rowsToInsert = selectedBgs.map((bg, idx) => ({
                     nomor_antrian: myQueueId,
                     background_id: bg.id,
                     status: 'menunggu',
                     nama_lengkap: nama,
                     kelas: kelas,
                     alamat: alamat,
-                    jumlah_foto: bgQuantities[bg.id]
+                    jumlah_foto: bgQuantities[bg.id],
+                    pigura: idx === 0 ? piguraQty : 0
                 }));
 
                 const { data: insertedData, error: insertError } = await supabaseClient
                     .from('queues')
                     .insert(rowsToInsert)
                     .select();
-                
+
                 if (insertError) throw insertError;
 
                 document.getElementById('ticket-number').textContent = myQueueId;
-                
+
                 // Save to localStorage
                 localStorage.setItem('myQueueId', myQueueId);
-                
+                localStorage.setItem('myPiguraQty', piguraQty);
+
                 // Track status locally
                 myTicketStatuses = {};
                 insertedData.forEach(row => {
@@ -326,15 +516,33 @@
                         status: row.status
                     };
                 });
-                
+
                 await fetchWaitingQueues();
                 renderTicketStatuses();
+                updateTicketPrice();
                 subscribeMyTicket();
 
             } catch (err) {
                 console.error(err);
-                alert("Terjadi kesalahan: " + err.message);
+                showPopup("Kesalahan Sistem", "Terjadi kesalahan: " + err.message);
                 resetApp();
+            }
+        }
+
+        function updateTicketPrice() {
+            const totalFoto = Object.values(myTicketStatuses).reduce((sum, item) => sum + (item.qty || 0), 0);
+            const savedPigura = parseInt(localStorage.getItem('myPiguraQty') || '0');
+            const hargaFoto = totalFoto * HARGA_PER_FOTO;
+            const hargaPigura = savedPigura * HARGA_PIGURA;
+            const totalHarga = hargaFoto + hargaPigura;
+            const priceEl = document.getElementById('ticket-total-price');
+            const qtyEl = document.getElementById('ticket-total-qty');
+            if (priceEl) priceEl.textContent = 'Rp ' + totalHarga.toLocaleString('id-ID');
+            if (qtyEl) {
+                let info = [];
+                if (totalFoto > 0) info.push(totalFoto + ' foto');
+                if (savedPigura > 0) info.push(savedPigura + ' pigura');
+                qtyEl.textContent = info.join(' + ');
             }
         }
 
@@ -345,35 +553,35 @@
             const html = Object.keys(myTicketStatuses).map(bgId => {
                 const item = myTicketStatuses[bgId];
                 if (!notifiedStates[item.id]) notifiedStates[item.id] = {};
-                
+
                 let statusBadge = '';
                 let bgClass = 'bg-white';
                 let positionInfo = '';
-                
+
                 if (item.status === 'dipanggil') {
                     statusBadge = '<span class="bg-neoYellow border-2 border-black px-2 py-1 shadow-[2px_2px_0px_0px_#000]">SILAKAN MASUK!</span>';
                     bgClass = 'bg-neoYellow';
                     isAnyCalled = true;
-                    
+
                     if (!notifiedStates[item.id].called) {
                         showNotification("Giliran Anda!", `Waktunya menuju ${item.name} sekarang!`);
                         notifiedStates[item.id].called = true;
                     }
                 } else if (item.status === 'ditunda') {
-                    statusBadge = '<span class="bg-neoPink text-black border-2 border-black px-2 py-1 font-black">DITUNDA</span>';
+                    statusBadge = '<span class="bg-neoPink text-black border-2 border-black px-2 py-1 font-black">DITUNDA | HARAP HUBUNGI PETUGAS</span>';
                     bgClass = 'bg-neoPink bg-opacity-30';
                 } else if (item.status === 'selesai' || item.status === 'batal') {
                     statusBadge = '<span class="bg-gray-300 border-2 border-black px-2 py-1">SELESAI</span>';
                     bgClass = 'bg-gray-200 opacity-60';
                 } else {
                     statusBadge = '<span class="bg-white border-2 border-black px-2 py-1">MENUNGGU</span>';
-                    
-                    const aheadCount = allWaitingQueues.filter(q => 
-                        q.background_id == bgId && 
+
+                    const aheadCount = allWaitingQueues.filter(q =>
+                        q.background_id == bgId &&
                         new Date(q.created_at) < new Date(item.created_at)
                     ).length;
 
-                    positionInfo = `<div class="mt-3 font-mono font-bold text-xs bg-black text-white inline-block px-2 py-1 shadow-[2px_2px_0px_0px_#000]">Di depan Anda: ${aheadCount} orang</div>`;
+                    positionInfo = `<div class="mt-3 font-mono font-bold text-xs bg-black text-white inline-block px-2 py-1 shadow-[2px_2px_0px_0px_#000] max-w-full break-words whitespace-normal">Di depan Anda: ${aheadCount} orang</div>`;
 
                     if (aheadCount === 3 && !notifiedStates[item.id].three) {
                         showNotification("Bersiap-siap!", `Sisa 3 antrian lagi di depan Anda untuk ${item.name}.`);
@@ -387,8 +595,8 @@
 
                 return `
                 <div class="border-2 border-black p-4 flex flex-col space-y-3 ${bgClass} shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                    <div class="flex justify-between items-center font-black uppercase text-lg leading-tight">
-                        <span>${item.name} <span class="text-xs font-mono font-bold bg-white border border-black text-black px-1.5 ml-1 rounded-sm">${item.qty}x</span></span>
+                    <div class="flex flex-wrap justify-between items-center font-black uppercase text-lg leading-tight gap-2">
+                        <div class="flex items-center flex-wrap gap-2 w-full">${item.name} <span class="text-xs font-mono font-bold bg-white border border-black text-black px-1.5 rounded-sm whitespace-nowrap">${item.qty}x</span></div>
                     </div>
                     <div class="font-bold text-xs tracking-widest">
                         ${statusBadge}
@@ -421,7 +629,7 @@
             realtimeChannel = supabaseClient.channel(`customer-all`)
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'queues' }, async payload => {
                     const newRow = payload.new || payload.old;
-                    
+
                     if (newRow && newRow.nomor_antrian === myQueueId) {
                         if (myTicketStatuses[newRow.background_id]) {
                             myTicketStatuses[newRow.background_id].status = newRow.status;
@@ -430,7 +638,7 @@
 
                     // Re-fetch waiting queues to recalculate position
                     await fetchWaitingQueues();
-                    renderTicketStatuses(); 
+                    renderTicketStatuses();
                 })
                 .subscribe();
         }
@@ -451,7 +659,7 @@
                         vibrate: [500, 200, 500, 200, 1000],
                         requireInteraction: true // Notif diam sampai diklik
                     });
-                } catch(e) {
+                } catch (e) {
                     new Notification(title, { body: body });
                 }
             }
@@ -462,15 +670,15 @@
                 <div class="font-black uppercase text-lg mb-1 leading-tight">${title}</div>
                 <div class="font-bold text-sm leading-tight">${body}</div>
             `;
-            
+
             toast.onclick = () => toast.remove();
             document.getElementById('toast-container').appendChild(toast);
-            
+
             try {
                 const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
                 audio.volume = 0.5;
                 audio.play();
-            } catch(e){}
+            } catch (e) { }
 
             requestAnimationFrame(() => {
                 setTimeout(() => toast.classList.remove('-translate-y-[150%]', 'opacity-0'), 50);
@@ -482,26 +690,62 @@
             }, 6000);
         }
 
+        async function downloadTicketImage() {
+            const ticketCard = document.getElementById('ticket-card');
+            if (!ticketCard) return;
+
+            const btn = event.target.closest('button');
+            const origText = btn.innerHTML;
+            btn.innerHTML = '\u23f3 MENYIMPAN...';
+            btn.disabled = true;
+
+            try {
+                const canvas = await html2canvas(ticketCard, {
+                    backgroundColor: '#ffffff',
+                    scale: 3,
+                    useCORS: true,
+                    allowTaint: true,
+                    logging: false
+                });
+
+                const link = document.createElement('a');
+                link.download = `Tiket-${myQueueId || 'Photobooth'}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+
+                showPopup("Berhasil", "\ud83d\udcf7 Tiket berhasil diunduh sebagai gambar!");
+            } catch (e) {
+                console.error(e);
+                showPopup("Error", "Gagal menyimpan tiket: " + e.message);
+            } finally {
+                btn.innerHTML = origText;
+                btn.disabled = false;
+            }
+        }
+
         function resetApp() {
             localStorage.removeItem('myQueueId');
-            
+            localStorage.removeItem('myPiguraQty');
+
             if (realtimeChannel) {
                 supabaseClient.removeChannel(realtimeChannel);
             }
             myQueueId = null;
+            piguraQty = 0;
             document.getElementById('selection-section').classList.remove('hidden');
             document.getElementById('ticket-section').classList.add('hidden');
-            
+
             // Reset form
             document.getElementById('input-nama').value = '';
             document.getElementById('input-kelas').value = '';
             document.getElementById('input-alamat').value = '';
             document.getElementById('input-lacak').value = '';
-            
+            if (document.getElementById('qty-pigura')) document.getElementById('qty-pigura').textContent = '0';
+
             // Reset quantities
             Object.keys(bgQuantities).forEach(id => {
                 bgQuantities[id] = 0;
-                if(document.getElementById(`qty-${id}`)) {
+                if (document.getElementById(`qty-${id}`)) {
                     document.getElementById(`qty-${id}`).textContent = '0';
                 }
             });
@@ -511,13 +755,13 @@
             document.getElementById('selection-section').classList.add('hidden');
             document.getElementById('ticket-section').classList.remove('hidden');
             document.getElementById('ticket-items').innerHTML = '<div class="text-center font-bold">Memulihkan tiket Anda...</div>';
-            
+
             const { data, error } = await supabaseClient
                 .from('queues')
                 .select('*, backgrounds(nama_background)')
                 .eq('nomor_antrian', queueId)
                 .in('status', ['menunggu', 'dipanggil', 'ditunda']);
-                
+
             if (error || !data || data.length === 0) {
                 showPopup("Tiket Kadaluarsa", `Antrian <b>${queueId}</b> tidak ditemukan, dibatalkan, atau sudah selesai.`);
                 resetApp();
@@ -540,11 +784,13 @@
 
             const nama = data[0].nama_lengkap || '';
             const kelas = data[0].kelas || '';
-            document.getElementById('ticket-user-info').textContent = `${nama} - ${kelas}`;
+            const alamat = data[0].alamat || '';
+            document.getElementById('ticket-user-info').textContent = `${nama} - ${kelas} - ${alamat}`;
             document.getElementById('ticket-number').textContent = myQueueId;
-            
+
             await fetchWaitingQueues();
             renderTicketStatuses();
+            updateTicketPrice();
             subscribeMyTicket();
         }
 
@@ -572,7 +818,7 @@
             }
 
             const { data, error } = await query;
-            
+
             btn.innerHTML = originalText;
             btn.disabled = false;
 
@@ -585,7 +831,7 @@
             const uniqueTickets = [];
             const seen = new Set();
             data.forEach(r => {
-                if(!seen.has(r.nomor_antrian)) {
+                if (!seen.has(r.nomor_antrian)) {
                     seen.add(r.nomor_antrian);
                     uniqueTickets.push(r);
                 }
@@ -613,15 +859,15 @@
         function showPopup(title, bodyHTML) {
             const colors = ['bg-neoYellow', 'bg-neoPink', 'bg-neoCyan', 'bg-neoGreen'];
             const randomColor = colors[Math.floor(Math.random() * colors.length)];
-            
+
             const titleEl = document.getElementById('popup-title');
             titleEl.textContent = title;
             titleEl.className = `text-xl font-black uppercase tracking-tight border-b-4 border-black pb-1 mb-4 inline-block pr-4 ${randomColor}`;
-            
+
             document.getElementById('popup-body').innerHTML = bodyHTML;
             const popup = document.getElementById('custom-popup');
             const content = document.getElementById('popup-content');
-            
+
             popup.classList.remove('hidden');
             requestAnimationFrame(() => {
                 content.classList.remove('scale-95', 'opacity-0');
@@ -632,14 +878,15 @@
         function closePopup() {
             const popup = document.getElementById('custom-popup');
             const content = document.getElementById('popup-content');
-            
+
             content.classList.remove('scale-100', 'opacity-100');
             content.classList.add('scale-95', 'opacity-0');
-            
+
             setTimeout(() => {
                 popup.classList.add('hidden');
             }, 300);
         }
     </script>
 </body>
+
 </html>

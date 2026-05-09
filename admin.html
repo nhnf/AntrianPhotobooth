@@ -6,13 +6,15 @@
     <title>Admin Dashboard - Photobooth</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        bgLight: '#f4f4f5', 
+                        bgLight: '#e4e4e7', 
                         neoYellow: '#fde047',
                         neoCyan: '#67e8f9',
                         neoPink: '#f9a8d4',
@@ -29,10 +31,10 @@
     </script>
     <style>
         body {
-            background-color: var(--tw-colors-bgLight, #f4f4f5);
+            background-color: var(--tw-colors-bgLight, #e4e4e7);
             color: #000;
-            background-image: radial-gradient(#000 1px, transparent 1px);
-            background-size: 20px 20px;
+            background-image: radial-gradient(#000 2px, transparent 2px);
+            background-size: 30px 30px;
         }
         .neo-button {
             border: 3px solid #000;
@@ -68,6 +70,17 @@
 
     <script src="shared/config.js"></script>
 
+    <!-- CUSTOM POPUP MODAL -->
+    <div id="custom-popup" class="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-[100] flex items-center justify-center p-4 hidden transition-opacity duration-200">
+        <div class="bg-white border-4 border-black shadow-[8px_8px_0px_0px_#000] p-6 max-w-sm w-full transform transition-all duration-300 scale-95 opacity-0" id="popup-content">
+            <h2 id="popup-title" class="text-xl font-black uppercase tracking-tight border-b-4 border-black pb-1 mb-4 inline-block pr-4">Perhatian</h2>
+            <div id="popup-body" class="font-bold mb-6 text-sm leading-relaxed"></div>
+            <div id="popup-actions" class="flex gap-3">
+                <button onclick="closePopup()" id="popup-btn-close" class="flex-1 bg-black text-white font-black uppercase px-4 py-3 hover:bg-neoCyan hover:text-black transition-colors border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000]">TUTUP</button>
+            </div>
+        </div>
+    </div>
+
     <!-- HEADER -->
     <header class="p-3 md:p-4 flex flex-col md:flex-row justify-between items-center border-b-4 border-black bg-white shrink-0 shadow-[0px_4px_0px_0px_#000] z-20 gap-3">
         <div class="flex items-center gap-3 md:gap-4 w-full md:w-auto">
@@ -79,14 +92,30 @@
                 </h1>
                 <p class="font-mono text-[10px] md:text-sm font-bold text-black bg-neoYellow border-2 border-black px-1 inline-block uppercase mt-0.5">Photobooth Mediatech An-Nur II</p>
             </div>
-        </div>
-        <div class="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
+        <div class="flex gap-2 w-full md:w-auto mt-2 md:mt-0 flex-wrap items-center">
+            <div class="flex flex-1 md:flex-none">
+                <input type="text" id="admin-prefix" placeholder="KODE" class="w-20 md:w-28 neo-button bg-white font-bold py-2 md:py-3 px-2 text-xs md:text-sm outline-none uppercase text-center" onkeydown="if(event.key === 'Enter') changePrefix(this.value.toUpperCase())">
+                <button onclick="changePrefix(document.getElementById('admin-prefix').value.toUpperCase())" class="neo-button bg-neoCyan font-bold uppercase py-2 md:py-3 px-3 text-xs md:text-sm ml-[-4px] z-10 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000] transition-all">
+                    SET
+                </button>
+            </div>
+            <button onclick="exportData()" class="flex-1 md:flex-none neo-button bg-neoYellow font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm tracking-wider">
+                ⬇️ Export
+            </button>
+            <button onclick="document.getElementById('import-file').click()" class="flex-1 md:flex-none neo-button bg-neoPink font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm tracking-wider">
+                ⬆️ Import
+            </button>
+            <input type="file" id="import-file" class="hidden" accept=".json" onchange="importData(event)">
+            <button onclick="downloadPDF()" class="flex-1 md:flex-none neo-button bg-neoGreen font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm tracking-wider">
+                📄 PDF
+            </button>
             <button onclick="broadcastClearCache()" class="flex-1 md:flex-none neo-button bg-neoCyan font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm tracking-wider">
                 Wipe Cache
             </button>
             <button onclick="resetAllQueues()" class="flex-1 md:flex-none neo-button bg-neoRed font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm tracking-wider">
                 Reset Semua
             </button>
+        </div>
         </div>
     </header>
 
@@ -103,21 +132,102 @@
         let allQueues = [];
         const cardColors = ['bg-neoYellow', 'bg-neoPink', 'bg-neoGreen'];
 
-        // Broadcast Channel for System Events
+        // Setup Supabase Realtime channel
         const systemChannel = supabaseClient.channel('system-events', {
             config: { broadcast: { self: true } }
         });
+
+        // Manage Prefix System
+        let currentPrefix = localStorage.getItem('adminTicketPrefix') || 'PB';
+        document.getElementById('admin-prefix').value = currentPrefix;
+
+        function changePrefix(newPrefix) {
+            currentPrefix = newPrefix;
+            localStorage.setItem('adminTicketPrefix', newPrefix);
+            systemChannel.send({
+                type: 'broadcast',
+                event: 'update_prefix',
+                payload: { prefix: newPrefix }
+            });
+            showPopup("Info", `Kode tiket berhasil diubah menjadi ${newPrefix}. Pelanggan yang sedang membuka web otomatis menggunakan kode ini.`);
+        }
+
+        systemChannel.on('broadcast', { event: 'request_prefix' }, () => {
+            // Pelanggan baru terhubung, kirimkan prefix yang sedang aktif
+            systemChannel.send({
+                type: 'broadcast',
+                event: 'update_prefix',
+                payload: { prefix: currentPrefix }
+            });
+        });
+
         systemChannel.subscribe();
 
-        async function broadcastClearCache() {
-            if (!confirm("⚠️ PERINGATAN: Tombol ini akan menghapus paksa memori (cache) tiket di SEMUA HP pelanggan yang saat ini membuka web antrian.\n\nYakin ingin mereset cache pelanggan?")) return;
+        function showPopup(title, message, isError = false) {
+            const color = isError ? 'bg-neoRed' : 'bg-neoYellow';
+            document.getElementById('popup-title').textContent = title;
+            document.getElementById('popup-title').className = `text-xl font-black uppercase tracking-tight border-b-4 border-black pb-1 mb-4 inline-block pr-4 ${color}`;
+            document.getElementById('popup-body').innerHTML = message;
             
-            await systemChannel.send({
-                type: 'broadcast',
-                event: 'clear_cache',
-                payload: { action: 'wipe' }
+            document.getElementById('popup-actions').innerHTML = `
+                <button onclick="closePopup()" class="flex-1 bg-black text-white font-black uppercase px-4 py-3 hover:bg-neoCyan hover:text-black transition-colors border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000]">TUTUP</button>
+            `;
+            
+            const popup = document.getElementById('custom-popup');
+            const content = document.getElementById('popup-content');
+            popup.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+                content.classList.add('scale-100', 'opacity-100');
             });
-            alert("✅ Sinyal pembersihan cache telah disebarkan ke semua pelanggan!");
+        }
+
+        function showConfirm(title, message, confirmText, onConfirm) {
+            document.getElementById('popup-title').textContent = title;
+            document.getElementById('popup-title').className = `text-xl font-black uppercase tracking-tight border-b-4 border-black pb-1 mb-4 inline-block pr-4 bg-neoPink`;
+            document.getElementById('popup-body').innerHTML = message;
+            
+            document.getElementById('popup-actions').innerHTML = `
+                <button onclick="closePopup()" class="flex-1 bg-white text-black font-black uppercase px-4 py-3 hover:bg-gray-200 transition-colors border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000]">BATAL</button>
+                <button id="btn-confirm-action" class="flex-1 bg-neoRed text-black font-black uppercase px-4 py-3 hover:bg-black hover:text-white transition-colors border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000]">${confirmText}</button>
+            `;
+            
+            document.getElementById('btn-confirm-action').onclick = () => {
+                closePopup();
+                onConfirm();
+            };
+            
+            const popup = document.getElementById('custom-popup');
+            const content = document.getElementById('popup-content');
+            popup.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+                content.classList.add('scale-100', 'opacity-100');
+            });
+        }
+
+        function closePopup() {
+            const popup = document.getElementById('custom-popup');
+            const content = document.getElementById('popup-content');
+            content.classList.remove('scale-100', 'opacity-100');
+            content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => popup.classList.add('hidden'), 200);
+        }
+
+        async function broadcastClearCache() {
+            showConfirm(
+                "Wipe Cache",
+                "⚠️ PERINGATAN: Tombol ini akan menghapus paksa memori (cache) tiket di SEMUA HP pelanggan yang saat ini membuka web antrian.<br><br>Yakin ingin mereset cache pelanggan?",
+                "YA, WIPE CACHE",
+                async () => {
+                    await systemChannel.send({
+                        type: 'broadcast',
+                        event: 'clear_cache',
+                        payload: { action: 'wipe' }
+                    });
+                    showPopup("Sukses", "✅ Sinyal pembersihan cache telah disebarkan ke semua pelanggan!");
+                }
+            );
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
@@ -127,7 +237,7 @@
 
         async function loadInitialData() {
             const { data: bgs, error: bgError } = await supabaseClient.from('backgrounds').select('*').order('id');
-            if (bgError) return alert(bgError.message);
+            if (bgError) return showPopup("Error", bgError.message, true);
             backgrounds = bgs;
 
             await fetchQueues();
@@ -140,7 +250,7 @@
                 .in('status', ['menunggu', 'dipanggil', 'ditunda'])
                 .order('created_at', { ascending: true });
             
-            if (error) return alert(error.message);
+            if (error) return showPopup("Error", error.message, true);
             allQueues = queues;
             renderColumns();
         }
@@ -279,9 +389,9 @@
             if (!nextWaiting) {
                 const anyWaiting = bgQueues.find(q => q.status === 'menunggu');
                 if (anyWaiting) {
-                    alert("Antrian berikutnya sedang sibuk berfoto di background lain. Sistem otomatis menunggunya. Belum ada antrian lain yang tersedia.");
+                    showPopup("Harap Tunggu", "Antrian berikutnya sedang sibuk berfoto di background lain. Sistem otomatis menunggunya. Belum ada antrian lain yang tersedia.");
                 } else {
-                    alert("Tidak ada antrian yang menunggu.");
+                    showPopup("Informasi", "Tidak ada antrian yang menunggu.");
                 }
                 return;
             }
@@ -294,7 +404,7 @@
                 await supabaseClient.from('queues').update({ status: 'dipanggil' }).eq('id', nextWaiting.id);
             } catch(e) {
                 console.error(e);
-                alert("Gagal memanggil antrian");
+                showPopup("Error", "Gagal memanggil antrian", true);
             }
         }
 
@@ -308,7 +418,7 @@
                 if (error) throw error;
             } catch(e) {
                 console.error(e);
-                alert("Gagal mengembalikan antrian: " + e.message);
+                showPopup("Error", "Gagal mengembalikan antrian: " + e.message, true);
             }
         }
 
@@ -324,7 +434,7 @@
                     if (error) throw error;
                 } catch(e) {
                     console.error("Error delaying status:", e);
-                    alert("Gagal menunda antrian: " + e.message);
+                    showPopup("Error", "Gagal menunda antrian: " + e.message, true);
                 }
             }
         }
@@ -337,26 +447,256 @@
                     if (error) throw error;
                 } catch(e) {
                     console.error("Error updating status:", e);
-                    alert("Gagal mengupdate status: " + e.message);
+                    showPopup("Error", "Gagal mengupdate status: " + e.message, true);
                 }
             }
         }
 
-        async function resetAllQueues() {
-            if(!confirm("YAKIN INGIN MERESET SEMUA ANTRIAN? Semua nomor antrian akan dibatalkan dan hitungan kembali ke awal hari.")) return;
-
+        async function downloadPDF() {
             try {
-                const { error } = await supabaseClient
+                const { data, error } = await supabaseClient
                     .from('queues')
-                    .update({ status: 'batal' })
-                    .neq('status', 'batal'); 
+                    .select('*, backgrounds(nama_background)')
+                    .neq('status', 'batal')
+                    .order('created_at', { ascending: true });
 
                 if (error) throw error;
-                alert("Antrian berhasil direset.");
+                if (!data || data.length === 0) {
+                    return showPopup("Tidak Ada Data", "Belum ada data pendaftar yang bisa diunduh.");
+                }
+
+                const HARGA_FOTO = 40000;
+                const HARGA_PIGURA = 35000;
+
+                // Group by nomor_antrian
+                const grouped = {};
+                data.forEach(row => {
+                    if (!grouped[row.nomor_antrian]) {
+                        grouped[row.nomor_antrian] = {
+                            nomor: row.nomor_antrian,
+                            nama: row.nama_lengkap || '-',
+                            kelas: row.kelas || '-',
+                            alamat: row.alamat || '-',
+                            items: [],
+                            totalFoto: 0,
+                            totalPigura: 0
+                        };
+                    }
+                    grouped[row.nomor_antrian].items.push({
+                        background: row.backgrounds?.nama_background || '-',
+                        qty: row.jumlah_foto || 0,
+                        status: row.status
+                    });
+                    grouped[row.nomor_antrian].totalFoto += (row.jumlah_foto || 0);
+                    grouped[row.nomor_antrian].totalPigura += (row.pigura || 0);
+                });
+
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('landscape', 'mm', 'a4');
+
+                // Header
+                doc.setFontSize(20);
+                doc.setFont('helvetica', 'bold');
+                doc.text('LAPORAN DATA PENDAFTAR PHOTOBOOTH', 148.5, 18, { align: 'center' });
+                
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'normal');
+                doc.text('Mediatech An-Nur II', 148.5, 25, { align: 'center' });
+                
+                const now = new Date();
+                const dateStr = now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+                doc.setFontSize(9);
+                doc.text(`Dicetak: ${dateStr}, ${timeStr}`, 148.5, 31, { align: 'center' });
+
+                // Table data
+                const tableData = [];
+                let no = 1;
+                let grandTotalFoto = 0;
+                let grandTotalPigura = 0;
+                let grandTotalHarga = 0;
+
+                Object.values(grouped).forEach(g => {
+                    let pembelianList = g.items.map(i => `- ${i.background} (${i.qty}x) [${i.status.toUpperCase()}]`);
+                    if (g.totalPigura > 0) {
+                        pembelianList.push(`- Pigura (${g.totalPigura}x)`);
+                    }
+                    const pembelianDetails = pembelianList.join('\n');
+
+                    const hargaFoto = g.totalFoto * HARGA_FOTO;
+                    const hargaPigura = g.totalPigura * HARGA_PIGURA;
+                    const totalHarga = hargaFoto + hargaPigura;
+
+                    grandTotalFoto += g.totalFoto;
+                    grandTotalPigura += g.totalPigura;
+                    grandTotalHarga += totalHarga;
+
+                    tableData.push([
+                        no++,
+                        g.nomor,
+                        g.nama,
+                        g.kelas,
+                        pembelianDetails,
+                        'Rp ' + totalHarga.toLocaleString('id-ID')
+                    ]);
+                });
+
+                doc.autoTable({
+                    startY: 36,
+                    head: [['No', 'Tiket', 'Nama Lengkap', 'Kelas/Asal', 'Pembelian', 'Total Harga']],
+                    body: tableData,
+                    theme: 'grid',
+                    styles: { fontSize: 8, cellPadding: 2, lineWidth: 0.3, lineColor: [0, 0, 0] },
+                    headStyles: { fillColor: [253, 224, 71], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', lineWidth: 0.5 },
+                    columnStyles: {
+                        0: { halign: 'center', cellWidth: 10 },
+                        1: { halign: 'center', cellWidth: 20, fontStyle: 'bold' },
+                        2: { cellWidth: 45 },
+                        3: { cellWidth: 35 },
+                        4: { cellWidth: 100 },
+                        5: { halign: 'right', cellWidth: 40, fontStyle: 'bold' }
+                    },
+                    alternateRowStyles: { fillColor: [245, 245, 245] },
+                    didDrawPage: function(data) {
+                        // Footer
+                        doc.setFontSize(8);
+                        doc.setFont('helvetica', 'italic');
+                        doc.text('Photobooth Mediatech An-Nur II', 14, doc.internal.pageSize.height - 8);
+                        doc.text('Halaman ' + doc.internal.getNumberOfPages(), doc.internal.pageSize.width - 14, doc.internal.pageSize.height - 8, { align: 'right' });
+                    }
+                });
+
+                // Summary row
+                const finalY = doc.lastAutoTable.finalY + 4;
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'bold');
+                doc.setFillColor(103, 232, 249);
+                doc.rect(14, finalY, doc.internal.pageSize.width - 28, 10, 'F');
+                doc.setDrawColor(0);
+                doc.rect(14, finalY, doc.internal.pageSize.width - 28, 10, 'S');
+                doc.text(`TOTAL: ${Object.keys(grouped).length} Pendaftar | ${grandTotalFoto} Foto | ${grandTotalPigura} Pigura | Rp ${grandTotalHarga.toLocaleString('id-ID')}`, 148.5, finalY + 7, { align: 'center' });
+
+                doc.save(`Laporan-Photobooth-${now.toISOString().slice(0,10)}.pdf`);
+                showPopup("Sukses", "\u2705 Laporan PDF berhasil diunduh!");
+
             } catch(e) {
                 console.error(e);
-                alert("Gagal mereset: " + e.message);
+                showPopup("Error", "Gagal mengunduh PDF: " + e.message, true);
             }
+        }
+
+        function resetAllQueues() {
+            showConfirm(
+                "Reset Semua Antrian",
+                "YAKIN INGIN MENGHAPUS SEMUA DATA ANTRIAN? Semua data akan terhapus permanen dan nomor tiket kembali ke PB-001.",
+                "YA, RESET",
+                async () => {
+                    try {
+                        // Ambil semua ID antrian yang ada
+                        const { data: allRows, error: fetchErr } = await supabaseClient
+                            .from('queues')
+                            .select('id');
+
+                        if (fetchErr) throw fetchErr;
+
+                        // Jika ada data, hapus berdasarkan ID tersebut
+                        if (allRows && allRows.length > 0) {
+                            const ids = allRows.map(row => row.id);
+                            const { error: delErr } = await supabaseClient
+                                .from('queues')
+                                .delete()
+                                .in('id', ids);
+
+                            if (delErr) throw delErr;
+                        }
+                        
+                        // Kirim sinyal ke semua HP pelanggan untuk clear cache
+                        await systemChannel.send({
+                            type: 'broadcast',
+                            event: 'clear_cache',
+                            payload: { action: 'wipe' }
+                        });
+                        
+                        showPopup("Sukses", "✅ Semua antrian dibatalkan! Nomor tiket berikutnya akan mulai dari PB-001.");
+                        fetchQueues();
+                    } catch(e) {
+                        console.error(e);
+                        showPopup("Error", "Gagal mereset: " + e.message, true);
+                    }
+                }
+            );
+        }
+
+        async function exportData() {
+            try {
+                const { data, error } = await supabaseClient.from('queues').select('*');
+                if (error) throw error;
+                
+                const dataStr = JSON.stringify(data, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                const now = new Date().toISOString().slice(0,10);
+                link.download = `backup-photobooth-${now}.json`;
+                link.href = url;
+                link.click();
+                URL.revokeObjectURL(url);
+                showPopup("Berhasil", "✅ Data antrian berhasil diekspor ke file JSON.");
+            } catch(e) {
+                console.error(e);
+                showPopup("Error", "Gagal mengekspor data: " + e.message, true);
+            }
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (!Array.isArray(data)) throw new Error("Format file tidak valid (bukan daftar antrian).");
+                    
+                    showConfirm(
+                        "Import Data JSON", 
+                        `Ditemukan ${data.length} baris data. Proses import akan MENGHAPUS SEMUA data saat ini dan menimpanya dengan data dari file JSON. Lanjutkan?`, 
+                        "YA, IMPORT", 
+                        async () => {
+                            try {
+                                // 1. Hapus data lama
+                                const { data: allRows } = await supabaseClient.from('queues').select('id');
+                                if (allRows && allRows.length > 0) {
+                                    await supabaseClient.from('queues').delete().in('id', allRows.map(r => r.id));
+                                }
+
+                                // 2. Hilangkan ID agar tidak bertabrakan dengan auto-increment Supabase
+                                const cleanData = data.map(row => {
+                                    const { id, ...rest } = row;
+                                    return rest;
+                                });
+
+                                // 3. Insert data baru
+                                const { error } = await supabaseClient.from('queues').insert(cleanData);
+                                if (error) throw error;
+
+                                showPopup("Berhasil", "✅ Data berhasil dipulihkan (import)!");
+                                fetchQueues();
+                            } catch(importErr) {
+                                console.error(importErr);
+                                showPopup("Error", "Gagal melakukan import: " + importErr.message, true);
+                            } finally {
+                                document.getElementById('import-file').value = "";
+                            }
+                        }
+                    );
+                } catch(err) {
+                    console.error(err);
+                    showPopup("Error", "Gagal membaca file JSON: " + err.message, true);
+                    document.getElementById('import-file').value = "";
+                }
+            };
+            reader.readAsText(file);
         }
     </script>
 </body>
