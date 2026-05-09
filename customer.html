@@ -12,7 +12,7 @@
             theme: {
                 extend: {
                     colors: {
-                        bgLight: '#f4f4f5', 
+                        bgLight: '#e4e4e7', 
                         neoYellow: '#fde047',
                         neoCyan: '#67e8f9',
                         neoPink: '#f9a8d4',
@@ -28,10 +28,10 @@
     </script>
     <style>
         body {
-            background-color: var(--tw-colors-bgLight, #f4f4f5);
+            background-color: var(--tw-colors-bgLight, #e4e4e7);
             color: #000;
-            background-image: radial-gradient(#000 1px, transparent 1px);
-            background-size: 20px 20px;
+            background-image: radial-gradient(#000 2px, transparent 2px);
+            background-size: 30px 30px;
         }
         .neo-button {
             border: 3px solid #000;
@@ -79,86 +79,105 @@
     <script src="shared/config.js"></script>
 
     <!-- SECTION 1: PILIH BACKGROUND -->
-    <div id="selection-section" class="flex-1 flex flex-col">
-        <div class="flex items-center justify-center gap-2 mb-6 mt-2">
-            <img src="logo-mm.png" alt="Logo" class="h-6 md:h-8">
-            <span class="font-black uppercase tracking-widest text-xs md:text-sm text-gray-500">Mediatech An-Nur II</span>
-        </div>
-        <div class="text-center mb-8">
-            <h1 class="text-3xl md:text-5xl font-black tracking-tighter uppercase mb-1">Tiket Antrian</h1>
-            <p class="font-mono font-bold border-b-4 border-neoYellow inline-block px-2 text-sm uppercase">Photobooth</p>
-        </div>
-
-        <div class="space-y-4">
-            <div>
-                <label class="font-mono text-sm font-bold uppercase block mb-1">Nama Lengkap</label>
-                <input type="text" id="input-nama" class="w-full border-4 border-black p-3 font-bold bg-bgLight focus:bg-white focus:outline-none focus:ring-4 focus:ring-neoPink" placeholder="Contoh: Budi Santoso">
-            </div>
-            <div>
-                <label class="font-mono text-sm font-bold uppercase block mb-1">Kelas</label>
-                <input type="text" id="input-kelas" class="w-full border-4 border-black p-3 font-bold bg-bgLight focus:bg-white focus:outline-none focus:ring-4 focus:ring-neoPink" placeholder="Contoh: 12 IPA 1">
-            </div>
-            <div>
-                <label class="font-mono text-sm font-bold uppercase block mb-1">Alamat / Instansi</label>
-                <input type="text" id="input-alamat" class="w-full border-4 border-black p-3 font-bold bg-bgLight focus:bg-white focus:outline-none focus:ring-4 focus:ring-neoPink" placeholder="Contoh: Malang">
-            </div>
-        </div>
-
-        <div class="h-1 w-full bg-black my-8"></div>
-
-        <div class="font-mono text-sm font-bold uppercase mb-4 bg-black text-white p-2 text-center">Pilih Background & Jumlah Foto:</div>
+    <div id="selection-section" class="flex-1 flex flex-col neo-card bg-white p-0 overflow-hidden w-full relative shadow-[8px_8px_0px_0px_#000]">
         
-        <div id="loading-bgs" class="font-mono text-center font-bold bg-neoYellow border-2 border-black p-2">MEMUAT PILIHAN...</div>
+        <div class="w-full p-4 border-b-4 border-black bg-neoYellow text-black text-center shadow-[0px_4px_0px_0px_#000] z-10 relative flex flex-col items-center justify-center gap-1">
+            <div class="flex items-center justify-center gap-2">
+                <img src="logo-mm.png" alt="Logo" class="h-6">
+                <span class="font-black text-xs uppercase tracking-widest text-left leading-none">Mediatech<br>An-Nur II</span>
+            </div>
+            <h1 class="text-3xl md:text-4xl font-black uppercase tracking-tighter mt-2">Tiket Antrian</h1>
+        </div>
+
+        <div class="p-6 flex-1 flex flex-col relative z-0">
+            
+            <div class="text-center mb-6">
+                <p class="font-mono font-bold border-b-2 border-black inline-block px-2 text-sm uppercase">Pendaftaran Photobooth</p>
+            </div>
+
+        <div class="space-y-5">
+            <div>
+                <label class="font-mono text-sm font-bold uppercase block mb-2 text-gray-700">Nama Lengkap</label>
+                <input type="text" id="input-nama" class="w-full border-2 border-black p-4 text-lg font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:translate-y-[2px]" placeholder="Contoh: Budi Santoso">
+            </div>
+            <div>
+                <label class="font-mono text-sm font-bold uppercase block mb-2 text-gray-700">Kelas / Instansi</label>
+                <input type="text" id="input-kelas" class="w-full border-2 border-black p-4 text-lg font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:translate-y-[2px]" placeholder="Contoh: 12 IPA 1 / SMA 1">
+            </div>
+            <div class="hidden">
+                <label class="font-mono text-sm font-bold uppercase block mb-1">Alamat</label>
+                <input type="text" id="input-alamat" class="w-full border-2 border-black p-3 font-bold bg-white" placeholder="Contoh: Malang">
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4 my-8">
+            <div class="h-1 flex-1 bg-black"></div>
+            <div class="font-mono text-xs font-bold uppercase bg-black text-white px-3 py-1 tracking-widest shadow-[2px_2px_0px_0px_#f9a8d4]">PILIH BACKGROUND</div>
+            <div class="h-1 flex-1 bg-black"></div>
+        </div>
+        
+        <div id="loading-bgs" class="font-mono text-center font-bold text-gray-500 p-4 border-2 border-black border-dashed">MEMUAT PILIHAN...</div>
         
         <div id="bg-list" class="space-y-4">
             <!-- Rendered via JS -->
         </div>
 
-        <button onclick="submitQueue()" class="neo-button w-full mt-8 bg-neoCyan text-black font-black py-4 uppercase tracking-widest text-xl">
-            Ambil Tiket
+        <button onclick="submitQueue()" class="w-full mt-10 bg-black text-white hover:bg-neoCyan hover:text-black font-black py-5 uppercase tracking-widest text-xl border-4 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[4px] transition-all">
+            AMBIL TIKET
         </button>
 
         <!-- LACAK TIKET -->
-        <div class="neo-card p-4 mt-8 bg-neoPink shadow-[4px_4px_0px_0px_#000]">
-            <h3 class="font-black uppercase tracking-tight mb-2">Kehilangan Tiket?</h3>
-            <p class="text-xs md:text-sm font-bold mb-3 leading-tight">Lupa nomor tiket? Masukkan <b>Nama Lengkap</b> atau <b>Nomor Tiket</b> Anda untuk melacak kembali.</p>
-            <div class="flex gap-2">
-                <input type="text" id="input-lacak" class="flex-1 border-4 border-black p-2 font-bold uppercase text-sm" placeholder="Nama atau PB-XXX">
-                <button onclick="lacakTiket()" class="bg-black text-white font-bold uppercase px-4 py-2 hover:bg-gray-800 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)] active:translate-y-1 active:shadow-none">Lacak</button>
+        <div class="mt-8 p-0 border-4 border-black bg-white overflow-hidden shadow-[6px_6px_0px_0px_#000]">
+            <div class="bg-neoYellow border-b-4 border-black p-3 shadow-[0px_4px_0px_0px_#000] z-10 relative">
+                <h3 class="font-black uppercase tracking-tight text-xl flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    Cari Tiket Lama
+                </h3>
+            </div>
+            <div class="p-5">
+                <p class="text-sm font-bold text-black mb-4 text-center">Lupa nomor tiket? Masukkan Nama atau Nomor Tiket untuk melacak.</p>
+                <div class="flex flex-col gap-2">
+                    <input type="text" id="input-lacak" class="flex-1 border-4 border-black p-3 font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all text-center" placeholder="Ketik di sini...">
+                    <button onclick="lacakTiket()" class="bg-black text-white font-black uppercase px-6 py-3 hover:bg-neoCyan hover:text-black transition-colors border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000]">Lacak</button>
+                </div>
             </div>
         </div>
+
+        </div> <!-- Tutup padding inner selection-section -->
     </div>
 
     <!-- SECTION 2: TIKET ANTRIAN -->
     <div id="ticket-section" class="flex-1 flex flex-col hidden mt-2">
-        <div class="bg-white border-4 border-black p-6 mb-6 shadow-[8px_8px_0px_0px_#000] relative transition-colors duration-300" id="ticket-card">
+        <div class="neo-card bg-white p-0 mb-6 relative transition-colors duration-300 overflow-hidden w-full shadow-[8px_8px_0px_0px_#000]" id="ticket-card">
             
-            <div class="flex items-center justify-center gap-2 mb-4 opacity-60">
-                <img src="logo-mm.png" alt="Logo" class="h-4">
-                <span class="font-black uppercase tracking-widest text-[10px]">Mediatech An-Nur II</span>
+            <div class="w-full p-4 border-b-4 border-black bg-neoCyan text-black text-center shadow-[0px_4px_0px_0px_#000] z-10 relative flex flex-col items-center justify-center gap-1 mb-6">
+                <div class="flex items-center justify-center gap-2">
+                    <img src="logo-mm.png" alt="Logo" class="h-6">
+                    <span class="font-black uppercase tracking-widest text-xs text-left leading-none">Mediatech<br>An-Nur II</span>
+                </div>
             </div>
             
             <div class="text-center pb-4">
-                <p class="font-mono text-xs font-bold uppercase bg-black text-white inline-block px-2 py-0.5 mb-2" id="ticket-user-info">--</p>
-                <div class="text-6xl md:text-8xl font-black tracking-tighter" id="ticket-number">--</div>
+                <p class="font-mono text-xs font-bold uppercase bg-black text-white border-2 border-black inline-block px-3 py-1 mb-3 shadow-[2px_2px_0px_0px_#000]" id="ticket-user-info">--</p>
+                <div class="text-7xl md:text-8xl font-black tracking-tighter text-black" id="ticket-number">--</div>
             </div>
             
-            <div class="h-1 w-full bg-black my-4"></div>
+            <div class="h-1 w-full bg-black my-6"></div>
             
-            <div class="font-mono text-sm font-bold uppercase bg-black text-white p-1 text-center mb-4">Status Tiap Background</div>
+            <div class="font-mono text-xs font-bold uppercase bg-black text-white px-2 py-1 tracking-widest inline-block mx-auto text-center mb-4 border-2 border-black shadow-[2px_2px_0px_0px_#fde047]">STATUS BACKGROUND</div>
             
-            <div id="ticket-items" class="space-y-3 text-left">
+            <div id="ticket-items" class="space-y-4 text-left mt-2 px-6 pb-6">
                 <!-- Rendered via JS -->
             </div>
             
         </div>
 
-        <p class="font-mono text-xs text-center font-bold px-4 bg-white border-2 border-black p-2 shadow-[4px_4px_0px_0px_#000]">
-            Sistem akan otomatis melompati Anda jika Anda sedang sibuk di background lain. Harap perhatikan layar TV!
+        <p class="font-mono text-xs text-center font-bold px-4 text-black bg-neoYellow border-4 border-black p-3 shadow-[4px_4px_0px_0px_#000] my-4 leading-relaxed">
+            Sistem otomatis melompati Anda jika Anda sedang di background lain. Harap perhatikan TV!
         </p>
 
-        <button onclick="resetApp()" class="neo-button w-full mt-4 bg-black text-white font-bold py-3 uppercase tracking-widest text-sm">
-            Buat Pendaftaran Baru
+        <button onclick="resetApp()" class="w-full mt-2 bg-neoCyan text-black border-4 border-black hover:bg-black hover:text-white transition-colors font-black py-4 uppercase tracking-widest text-lg shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-y-[6px]">
+            BUAT ANTRIAN BARU
         </button>
     </div>
 
@@ -220,18 +239,22 @@
             backgrounds = data;
             backgrounds.forEach(bg => { bgQuantities[bg.id] = 0; });
 
-            listEl.innerHTML = backgrounds.map(bg => `
-                <div class="bg-white border-4 border-black p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-[4px_4px_0px_0px_#000]">
-                    <div class="text-center md:text-left">
+            const colors = ['hover:bg-neoPink', 'hover:bg-neoYellow', 'hover:bg-neoCyan', 'hover:bg-neoGreen'];
+            listEl.innerHTML = backgrounds.map((bg, idx) => {
+                const color = colors[idx % colors.length];
+                return `
+                <div class="bg-white ${color} border-2 border-black p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all">
+                    <div class="text-center md:text-left flex-1">
                         <h3 class="text-xl font-black uppercase tracking-tight">${bg.nama_background}</h3>
                     </div>
-                    <div class="flex items-center space-x-4 bg-bgLight p-2 border-2 border-black">
-                        <button onclick="changeQty(${bg.id}, -1)" class="w-10 h-10 border-2 border-black bg-neoPink font-black text-xl flex items-center justify-center neo-button">-</button>
-                        <span id="qty-${bg.id}" class="font-mono font-black text-2xl w-8 text-center">0</span>
-                        <button onclick="changeQty(${bg.id}, 1)" class="w-10 h-10 border-2 border-black bg-neoGreen font-black text-xl flex items-center justify-center neo-button">+</button>
+                    <div class="flex items-center bg-white border-2 border-black rounded-full overflow-hidden shrink-0">
+                        <button onclick="changeQty(${bg.id}, -1)" class="w-12 h-10 bg-white hover:bg-gray-200 font-black text-xl flex items-center justify-center transition-colors border-r-2 border-black">-</button>
+                        <span id="qty-${bg.id}" class="font-mono font-black text-lg w-10 text-center flex items-center justify-center bg-white h-10">0</span>
+                        <button onclick="changeQty(${bg.id}, 1)" class="w-12 h-10 bg-white hover:bg-gray-200 font-black text-xl flex items-center justify-center transition-colors border-l-2 border-black">+</button>
                     </div>
                 </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         function changeQty(bgId, delta) {
@@ -363,11 +386,11 @@
                 }
 
                 return `
-                <div class="border-4 border-black p-3 flex flex-col space-y-2 ${bgClass} transition-colors duration-300 mb-3">
+                <div class="border-2 border-black p-4 flex flex-col space-y-3 ${bgClass} shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                     <div class="flex justify-between items-center font-black uppercase text-lg leading-tight">
-                        <span>${item.name} <span class="text-xs font-mono bg-black text-white px-1 ml-1">${item.qty}x</span></span>
+                        <span>${item.name} <span class="text-xs font-mono font-bold bg-white border border-black text-black px-1.5 ml-1 rounded-sm">${item.qty}x</span></span>
                     </div>
-                    <div class="font-bold text-sm">
+                    <div class="font-bold text-xs tracking-widest">
                         ${statusBadge}
                     </div>
                     ${positionInfo}
