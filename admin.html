@@ -74,10 +74,14 @@
             <h1 class="text-4xl font-black uppercase tracking-tighter">Operator Dashboard</h1>
             <p class="font-mono text-sm font-bold border-b-2 border-black inline-block mt-1">SMART QUEUE + FITUR TUNDA</p>
         </div>
-        
-        <button onclick="resetAllQueues()" class="neo-button bg-neoRed font-bold uppercase py-3 px-6 text-sm tracking-widest flex items-center gap-2">
-            Reset Semua Antrian
-        </button>
+        <div class="flex flex-col md:flex-row gap-4">
+            <button onclick="broadcastClearCache()" class="neo-button bg-neoCyan font-bold uppercase py-3 px-4 md:px-6 text-xs md:text-sm tracking-widest flex items-center justify-center gap-2">
+                Wipe Cache HP
+            </button>
+            <button onclick="resetAllQueues()" class="neo-button bg-neoRed font-bold uppercase py-3 px-4 md:px-6 text-xs md:text-sm tracking-widest flex items-center justify-center gap-2">
+                Reset Semua Antrian
+            </button>
+        </div>
     </header>
 
     <!-- COLUMNS -->
@@ -89,6 +93,23 @@
         let backgrounds = [];
         let allQueues = [];
         const cardColors = ['bg-neoYellow', 'bg-neoPink', 'bg-neoGreen'];
+
+        // Broadcast Channel for System Events
+        const systemChannel = supabaseClient.channel('system-events', {
+            config: { broadcast: { self: true } }
+        });
+        systemChannel.subscribe();
+
+        async function broadcastClearCache() {
+            if (!confirm("⚠️ PERINGATAN: Tombol ini akan menghapus paksa memori (cache) tiket di SEMUA HP pelanggan yang saat ini membuka web antrian.\n\nYakin ingin mereset cache pelanggan?")) return;
+            
+            await systemChannel.send({
+                type: 'broadcast',
+                event: 'clear_cache',
+                payload: { action: 'wipe' }
+            });
+            alert("✅ Sinyal pembersihan cache telah disebarkan ke semua pelanggan!");
+        }
 
         document.addEventListener('DOMContentLoaded', async () => {
             await loadInitialData();

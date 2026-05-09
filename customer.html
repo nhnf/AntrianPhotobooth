@@ -64,6 +64,9 @@
 </head>
 <body class="flex flex-col p-4 md:p-8 max-w-md mx-auto relative min-h-screen pb-20">
 
+    <!-- TOAST CONTAINER -->
+    <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-3 w-[90%] max-w-sm pointer-events-none"></div>
+
     <script src="shared/config.js"></script>
 
     <!-- SECTION 1: PILIH BACKGROUND -->
@@ -139,13 +142,35 @@
         let backgrounds = [];
         let bgQuantities = {};
         
-        let myQueueId = null; // Master Queue Number e.g. PB-001
+        let myQueueId = null; 
         let myTicketStatuses = {}; 
         let realtimeChannel = null;
+        let allWaitingQueues = [];
+        let notifiedStates = {};
 
         document.addEventListener('DOMContentLoaded', async () => {
+            requestNotificationPermission();
             await loadBackgrounds();
+            
+            const savedQueueId = localStorage.getItem('myQueueId');
+            if (savedQueueId) {
+                await restoreQueue(savedQueueId);
+            }
         });
+
+        function requestNotificationPermission() {
+            if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+                Notification.requestPermission();
+            }
+        }
+
+        // Listen for admin wipe cache command
+        supabaseClient.channel('system-events')
+            .on('broadcast', { event: 'clear_cache' }, (payload) => {
+                showNotification("Sistem Di-reset", "Admin telah me-reset sesi antrian di HP ini.");
+                resetApp();
+            })
+            .subscribe();
 
         async function loadBackgrounds() {
             const { data, error } = await supabaseClient
@@ -222,24 +247,33 @@
                     jumlah_foto: bgQuantities[bg.id]
                 }));
 
-                const { error: insertError } = await supabaseClient
+                const { data: insertedData, error: insertError } = await supabaseClient
                     .from('queues')
-                    .insert(rowsToInsert);
+                    .insert(rowsToInsert)
+                    .select();
                 
                 if (insertError) throw insertError;
 
                 document.getElementById('ticket-number').textContent = myQueueId;
                 
+                // Save to localStorage
+                localStorage.setItem('myQueueId', myQueueId);
+                localStorage.setItem('myTicketInfo', JSON.stringify({ nama, kelas }));
+                
                 // Track status locally
                 myTicketStatuses = {};
-                selectedBgs.forEach(bg => {
-                    myTicketStatuses[bg.id] = {
-                        name: bg.nama_background,
-                        qty: bgQuantities[bg.id],
-                        status: 'menunggu'
+                insertedData.forEach(row => {
+                    const bgName = selectedBgs.find(b => b.id === row.background_id).nama_background;
+                    myTicketStatuses[row.background_id] = {
+                        id: row.id,
+                        created_at: row.created_at,
+                        name: bgName,
+                        qty: row.jumlah_foto,
+                        status: row.status
                     };
                 });
                 
+                await fetchWaitingQueues();
                 renderTicketStatuses();
                 subscribeMyTicket();
 
@@ -252,19 +286,25 @@
 
         function renderTicketStatuses() {
             const container = document.getElementById('ticket-items');
-            
             let isAnyCalled = false;
 
             const html = Object.keys(myTicketStatuses).map(bgId => {
                 const item = myTicketStatuses[bgId];
+                if (!notifiedStates[item.id]) notifiedStates[item.id] = {};
                 
                 let statusBadge = '';
                 let bgClass = 'bg-white';
+                let positionInfo = '';
                 
                 if (item.status === 'dipanggil') {
-                    statusBadge = '<span class="bg-neoYellow border-2 border-black px-2 py-1 shadow-[2px_2px_0px_0px_#000]">SILAKAN MENUJU PHOTOBOOTH!</span>';
+                    statusBadge = '<span class="bg-neoYellow border-2 border-black px-2 py-1 shadow-[2px_2px_0px_0px_#000]">SILAKAN MASUK!</span>';
                     bgClass = 'bg-neoYellow';
                     isAnyCalled = true;
+                    
+                    if (!notifiedStates[item.id].called) {
+                        showNotification("Giliran Anda!", `Waktunya menuju ${item.name} sekarang!`);
+                        notifiedStates[item.id].called = true;
+                    }
                 } else if (item.status === 'ditunda') {
                     statusBadge = '<span class="bg-neoPink text-black border-2 border-black px-2 py-1 font-black">DITUNDA</span>';
                     bgClass = 'bg-neoPink bg-opacity-30';
@@ -273,16 +313,33 @@
                     bgClass = 'bg-gray-200 opacity-60';
                 } else {
                     statusBadge = '<span class="bg-white border-2 border-black px-2 py-1">MENUNGGU</span>';
+                    
+                    const aheadCount = allWaitingQueues.filter(q => 
+                        q.background_id == bgId && 
+                        new Date(q.created_at) < new Date(item.created_at)
+                    ).length;
+
+                    positionInfo = `<div class="mt-3 font-mono font-bold text-xs bg-black text-white inline-block px-2 py-1 shadow-[2px_2px_0px_0px_#000]">Di depan Anda: ${aheadCount} orang</div>`;
+
+                    if (aheadCount === 3 && !notifiedStates[item.id].three) {
+                        showNotification("Bersiap-siap!", `Sisa 3 antrian lagi di depan Anda untuk ${item.name}.`);
+                        notifiedStates[item.id].three = true;
+                    }
+                    if (aheadCount === 1 && !notifiedStates[item.id].one) {
+                        showNotification("Hampir tiba!", `Sisa 1 antrian lagi! Segera mendekat ke ${item.name}.`);
+                        notifiedStates[item.id].one = true;
+                    }
                 }
 
                 return `
-                <div class="border-4 border-black p-3 flex flex-col space-y-2 ${bgClass}">
-                    <div class="flex justify-between items-center font-black uppercase text-lg">
-                        <span>${item.name} <span class="text-sm font-mono bg-black text-white px-1 ml-1">${item.qty}x</span></span>
+                <div class="border-4 border-black p-3 flex flex-col space-y-2 ${bgClass} transition-colors duration-300 mb-3">
+                    <div class="flex justify-between items-center font-black uppercase text-lg leading-tight">
+                        <span>${item.name} <span class="text-xs font-mono bg-black text-white px-1 ml-1">${item.qty}x</span></span>
                     </div>
                     <div class="font-bold text-sm">
                         ${statusBadge}
                     </div>
+                    ${positionInfo}
                 </div>
                 `;
             }).join('');
@@ -290,11 +347,16 @@
             container.innerHTML = html;
 
             const cardEl = document.getElementById('ticket-card');
-            if (isAnyCalled) {
-                cardEl.classList.add('called-state');
-            } else {
-                cardEl.classList.remove('called-state');
-            }
+            if (isAnyCalled) cardEl.classList.add('called-state');
+            else cardEl.classList.remove('called-state');
+        }
+
+        async function fetchWaitingQueues() {
+            const { data } = await supabaseClient
+                .from('queues')
+                .select('id, background_id, created_at, status')
+                .eq('status', 'menunggu');
+            allWaitingQueues = data || [];
         }
 
         function subscribeMyTicket() {
@@ -302,27 +364,58 @@
                 supabaseClient.removeChannel(realtimeChannel);
             }
 
-            realtimeChannel = supabaseClient.channel(`ticket-${myQueueId}`)
-                .on(
-                    'postgres_changes',
-                    {
-                        event: 'UPDATE',
-                        schema: 'public',
-                        table: 'queues',
-                        filter: `nomor_antrian=eq.${myQueueId}`
-                    },
-                    (payload) => {
-                        const bgId = payload.new.background_id;
-                        if (myTicketStatuses[bgId]) {
-                            myTicketStatuses[bgId].status = payload.new.status;
-                            renderTicketStatuses();
+            realtimeChannel = supabaseClient.channel(`customer-all`)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'queues' }, async payload => {
+                    const newRow = payload.new || payload.old;
+                    
+                    if (newRow && newRow.nomor_antrian === myQueueId) {
+                        if (myTicketStatuses[newRow.background_id]) {
+                            myTicketStatuses[newRow.background_id].status = newRow.status;
                         }
                     }
-                )
+
+                    // Re-fetch waiting queues to recalculate position
+                    await fetchWaitingQueues();
+                    renderTicketStatuses(); 
+                })
                 .subscribe();
         }
 
+        function showNotification(title, body) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(title, { body: body });
+            }
+
+            const toast = document.createElement('div');
+            toast.className = 'bg-neoCyan border-4 border-black p-4 shadow-[4px_4px_0px_0px_#000] transform transition-all duration-300 -translate-y-[150%] opacity-0 pointer-events-auto cursor-pointer';
+            toast.innerHTML = `
+                <div class="font-black uppercase text-lg mb-1 leading-tight">${title}</div>
+                <div class="font-bold text-sm leading-tight">${body}</div>
+            `;
+            
+            toast.onclick = () => toast.remove();
+            document.getElementById('toast-container').appendChild(toast);
+            
+            try {
+                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                audio.volume = 0.5;
+                audio.play();
+            } catch(e){}
+
+            requestAnimationFrame(() => {
+                setTimeout(() => toast.classList.remove('-translate-y-[150%]', 'opacity-0'), 50);
+            });
+
+            setTimeout(() => {
+                toast.classList.add('-translate-y-[150%]', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 6000);
+        }
+
         function resetApp() {
+            localStorage.removeItem('myQueueId');
+            localStorage.removeItem('myTicketInfo');
+            
             if (realtimeChannel) {
                 supabaseClient.removeChannel(realtimeChannel);
             }
@@ -342,6 +435,44 @@
                     document.getElementById(`qty-${id}`).textContent = '0';
                 }
             });
+        }
+
+        async function restoreQueue(queueId) {
+            document.getElementById('selection-section').classList.add('hidden');
+            document.getElementById('ticket-section').classList.remove('hidden');
+            document.getElementById('ticket-items').innerHTML = '<div class="text-center font-bold">Memulihkan tiket Anda...</div>';
+            
+            const savedInfo = JSON.parse(localStorage.getItem('myTicketInfo') || '{}');
+            
+            const { data, error } = await supabaseClient
+                .from('queues')
+                .select('*, backgrounds(nama_background)')
+                .eq('nomor_antrian', queueId)
+                .in('status', ['menunggu', 'dipanggil', 'ditunda']);
+                
+            if (error || !data || data.length === 0) {
+                resetApp();
+                return;
+            }
+
+            myQueueId = queueId;
+            myTicketStatuses = {};
+            data.forEach(row => {
+                myTicketStatuses[row.background_id] = {
+                    id: row.id,
+                    created_at: row.created_at,
+                    name: row.backgrounds.nama_background,
+                    qty: row.jumlah_foto,
+                    status: row.status
+                };
+            });
+
+            document.getElementById('ticket-user-info').textContent = `${savedInfo.nama || ''} - ${savedInfo.kelas || ''}`;
+            document.getElementById('ticket-number').textContent = myQueueId;
+            
+            await fetchWaitingQueues();
+            renderTicketStatuses();
+            subscribeMyTicket();
         }
     </script>
 </body>
