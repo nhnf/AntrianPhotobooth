@@ -64,35 +64,39 @@
         ::-webkit-scrollbar-thumb { background: #000; border-radius: 0; }
     </style>
 </head>
-<body class="flex flex-col p-4 md:p-8 min-h-screen">
+<body class="flex flex-col min-h-screen">
 
     <script src="shared/config.js"></script>
 
     <!-- HEADER -->
-    <header class="p-3 md:p-4 flex flex-col md:flex-row justify-between items-center border-b-4 border-black bg-white mb-6 gap-3 shadow-[0px_4px_0px_0px_#000]">
-        <div class="flex items-center gap-3">
-            <img src="logo-mm.png" alt="Logo" class="h-8 md:h-10">
+    <header class="p-3 md:p-4 flex flex-col md:flex-row justify-between items-center border-b-4 border-black bg-white shrink-0 shadow-[0px_4px_0px_0px_#000] z-20 gap-3">
+        <div class="flex items-center gap-3 md:gap-4 w-full md:w-auto">
+            <img src="logo-mm.png" alt="Logo" class="h-8 md:h-12 hidden sm:block">
             <div>
-                <h1 class="text-2xl md:text-3xl font-black uppercase tracking-tighter leading-none">
-                    Admin<span class="bg-black text-white px-2 ml-1 inline-block">Control</span>
+                <h1 class="text-2xl md:text-4xl font-black uppercase tracking-tighter leading-none flex items-center gap-2 text-black">
+                    <img src="logo-mm.png" alt="Logo" class="h-6 sm:hidden">
+                    Dashboard Admin
                 </h1>
-                <p class="font-mono text-[10px] md:text-xs font-bold text-black bg-neoYellow inline-block px-1 border-2 border-black uppercase mt-1">SMART QUEUE • MEDIATECH AN-NUR II</p>
+                <p class="font-mono text-[10px] md:text-sm font-bold text-black bg-neoYellow border-2 border-black px-1 inline-block uppercase mt-0.5">Photobooth Mediatech An-Nur II</p>
             </div>
         </div>
-        <div class="flex gap-2 w-full md:w-auto">
-            <button onclick="broadcastClearCache()" class="flex-1 md:flex-none neo-button bg-neoCyan font-bold uppercase py-2 px-3 text-xs tracking-wider">
+        <div class="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
+            <button onclick="broadcastClearCache()" class="flex-1 md:flex-none neo-button bg-neoCyan font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm tracking-wider">
                 Wipe Cache
             </button>
-            <button onclick="resetAllQueues()" class="flex-1 md:flex-none neo-button bg-neoRed font-bold uppercase py-2 px-3 text-xs tracking-wider">
+            <button onclick="resetAllQueues()" class="flex-1 md:flex-none neo-button bg-neoRed font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm tracking-wider">
                 Reset Semua
             </button>
         </div>
     </header>
 
-    <!-- COLUMNS -->
-    <div id="admin-columns" class="grid grid-cols-1 md:grid-cols-3 gap-8 flex-1 items-start">
-        <!-- Rendered via JS -->
-    </div>
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 w-full max-w-[1920px] mx-auto p-4 md:p-8 z-10 flex flex-col">
+        <!-- COLUMNS -->
+        <div id="admin-columns" class="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 flex-1 items-start">
+            <!-- Rendered via JS -->
+        </div>
+    </main>
 
     <script>
         let backgrounds = [];
