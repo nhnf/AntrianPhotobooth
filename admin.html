@@ -10,9 +10,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
-        rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script src="shared/tailwind-config.js"></script>
     <link rel="stylesheet" href="shared/styles.css">
 </head>
@@ -25,78 +24,87 @@
     <script src="js/auth.js"></script>
 
     <!-- CUSTOM POPUP MODAL -->
-    <div id="custom-popup"
-        class="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-[100] flex items-center justify-center p-4 hidden transition-opacity duration-200">
-        <div class="bg-white border-4 border-black shadow-[8px_8px_0px_0px_#000] p-6 max-w-sm w-full transform transition-all duration-300 scale-95 opacity-0"
-            id="popup-content">
-            <h2 id="popup-title"
-                class="text-xl font-black uppercase tracking-tight border-b-4 border-black pb-1 mb-4 inline-block pr-4">
-                Perhatian</h2>
+    <div id="custom-popup" class="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-[100] flex items-center justify-center p-4 hidden transition-opacity duration-200">
+        <div class="bg-white border-4 border-black shadow-[8px_8px_0px_0px_#000] p-6 max-w-sm w-full transform transition-all duration-300 scale-95 opacity-0" id="popup-content">
+            <h2 id="popup-title" class="text-xl font-black uppercase tracking-tight border-b-4 border-black pb-1 mb-4 inline-block pr-4">Perhatian</h2>
             <div id="popup-body" class="font-bold mb-6 text-sm leading-relaxed"></div>
             <div id="popup-actions" class="flex gap-3">
-                <button onclick="closePopup()"
-                    class="flex-1 bg-black text-white font-black uppercase px-4 py-3 hover:bg-neoCyan hover:text-black transition-colors border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000]">TUTUP</button>
+                <button onclick="closePopup()" class="flex-1 bg-black text-white font-black uppercase px-4 py-3 hover:bg-neoCyan hover:text-black transition-colors border-4 border-black shadow-[4px_4px_0px_0px_#000]">TUTUP</button>
             </div>
         </div>
     </div>
 
     <!-- HEADER -->
-    <header
-        class="p-3 md:p-4 flex flex-col xl:flex-row justify-between items-start xl:items-center border-b-4 border-black bg-white shrink-0 shadow-[0px_4px_0px_0px_#000] z-20 gap-4">
+    <header class="p-3 md:p-4 flex flex-col xl:flex-row justify-between items-start xl:items-center border-b-4 border-black bg-white shrink-0 shadow-[0px_4px_0px_0px_#000] z-20 gap-4">
         <div class="flex items-center gap-3 md:gap-4">
             <img src="logo-mm.png" alt="Logo" class="h-8 md:h-12 hidden sm:block">
             <div>
-                <h1
-                    class="text-2xl md:text-4xl font-black uppercase tracking-tighter leading-none flex items-center gap-2 text-black">
+                <h1 class="text-2xl md:text-4xl font-black uppercase tracking-tighter leading-none flex items-center gap-2 text-black">
                     <img src="logo-mm.png" alt="Logo" class="h-6 sm:hidden">
                     Dashboard Admin
                 </h1>
-                <p
-                    class="font-mono text-[10px] md:text-sm font-bold text-black bg-neoYellow border-2 border-black px-1 inline-block uppercase mt-0.5">
+                <p class="font-mono text-[10px] md:text-sm font-bold text-black bg-neoYellow border-2 border-black px-1 inline-block uppercase mt-0.5">
                     Photobooth Mediatech An-Nur II</p>
             </div>
         </div>
         <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full xl:w-auto items-center">
-            <div class="flex col-span-2 sm:flex-none">
-                <input type="text" id="admin-prefix" placeholder="KODE"
-                    class="w-full sm:w-20 md:w-28 neo-button bg-white font-bold py-2 md:py-3 px-2 text-xs md:text-sm outline-none uppercase text-center"
-                    onkeydown="if(event.key === 'Enter') changePrefix(this.value.toUpperCase())">
-                <button onclick="changePrefix(document.getElementById('admin-prefix').value.toUpperCase())"
-                    class="neo-button bg-neoCyan font-bold uppercase py-2 md:py-3 px-3 text-xs md:text-sm ml-[-4px] z-10 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000] transition-all shrink-0">
-                    SET
-                </button>
+            <!-- Booth Selector -->
+            <div class="col-span-2 flex gap-2">
+                <select id="booth-selector" onchange="switchBooth(this.value)"
+                    class="flex-1 neo-button bg-black text-white font-bold py-2 px-3 text-sm uppercase outline-none cursor-pointer">
+                </select>
             </div>
             <button onclick="exportData()"
-                class="w-full sm:w-auto neo-button bg-neoYellow font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm tracking-wider">
-                Export
-            </button>
+                class="w-full sm:w-auto neo-button bg-neoYellow font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm">Export</button>
             <button onclick="document.getElementById('import-file').click()"
-                class="w-full sm:w-auto neo-button bg-neoPink font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm tracking-wider">
-                Import
-            </button>
+                class="w-full sm:w-auto neo-button bg-neoPink font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm">Import</button>
             <input type="file" id="import-file" class="hidden" accept=".json" onchange="importData(event)">
             <button onclick="downloadPDF()"
-                class="w-full sm:w-auto neo-button bg-neoGreen font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm tracking-wider">
-                PDF
-            </button>
+                class="w-full sm:w-auto neo-button bg-neoGreen font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm">PDF</button>
             <button onclick="broadcastClearCache()"
-                class="w-full sm:w-auto neo-button bg-neoCyan font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm tracking-wider">
-                Wipe Cache
-            </button>
+                class="w-full sm:w-auto neo-button bg-neoCyan font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm">Wipe Cache</button>
             <button onclick="resetAllQueues()"
-                class="w-full sm:w-auto neo-button bg-neoRed font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm tracking-wider">
-                Reset Semua
-            </button>
+                class="w-full sm:w-auto neo-button bg-neoRed font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm">Reset Booth</button>
             <button onclick="logout()"
-                class="col-span-2 sm:col-span-1 sm:w-auto neo-button bg-white font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm tracking-wider border-2 border-black">
-                🔒 Logout
-            </button>
+                class="col-span-2 sm:col-span-1 sm:w-auto neo-button bg-white font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm border-2 border-black">🔒 Logout</button>
         </div>
     </header>
 
+    <!-- BOOTH MANAGEMENT PANEL -->
+    <div class="border-b-4 border-black bg-bgLight shrink-0">
+        <div class="max-w-[1920px] mx-auto">
+            <!-- Toggle Button -->
+            <button onclick="document.getElementById('booth-panel').classList.toggle('hidden')"
+                class="w-full p-3 font-mono font-bold uppercase text-sm flex items-center justify-between gap-2 hover:bg-neoYellow transition-colors border-b-2 border-black">
+                <span>⚙️ Manajemen Booth (Tambah / Edit / Hapus)</span>
+                <span class="text-xs">▼ klik untuk buka/tutup</span>
+            </button>
+            <div id="booth-panel" class="hidden p-4 md:p-6 space-y-4">
+                <!-- Tambah Booth Baru -->
+                <div class="flex flex-wrap gap-2 items-end p-4 border-4 border-black bg-white shadow-[4px_4px_0px_0px_#000]">
+                    <div class="flex flex-col gap-1">
+                        <label class="font-mono text-xs font-bold uppercase">Nama Booth Baru</label>
+                        <input type="text" id="new-booth-name" placeholder="cth: Booth Aula A"
+                            class="border-2 border-black px-3 py-2 font-bold focus:outline-none focus:ring-2 focus:ring-neoCyan w-48">
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="font-mono text-xs font-bold uppercase">Prefix Tiket</label>
+                        <input type="text" id="new-booth-prefix" placeholder="cth: AUA" maxlength="5"
+                            class="border-2 border-black px-3 py-2 font-bold uppercase focus:outline-none focus:ring-2 focus:ring-neoCyan w-24">
+                    </div>
+                    <button onclick="addBooth()"
+                        class="neo-button bg-neoCyan font-black uppercase py-2 px-6 text-sm">+ Tambah Booth</button>
+                </div>
+                <!-- Daftar Booth -->
+                <div id="booth-management-list" class="space-y-2">
+                    <!-- Rendered via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- MAIN CONTENT -->
     <main class="flex-1 w-full max-w-[1920px] mx-auto p-4 md:p-8 z-10 flex flex-col">
-        <!-- COLUMNS -->
         <div id="admin-columns" class="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 flex-1 items-start">
             <!-- Rendered via JS -->
         </div>

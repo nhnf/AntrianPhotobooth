@@ -12,6 +12,10 @@ let realtimeChannel = null;
 let allWaitingQueues = [];
 let notifiedStates = {};
 
+// Multi-Booth state
+let currentBoothId = null;   // integer, dari URL ?booth=ID
+let currentBoothInfo = null; // { id, nama_booth, ticket_prefix }
+
 // ============================================
 // Service Worker Registration
 // ============================================
@@ -26,9 +30,24 @@ if ('serviceWorker' in navigator) {
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
     requestNotificationPermission();
+
+    // Muat info booth dari URL
+    currentBoothId = getBoothIdFromURL();
+    if (currentBoothId) {
+        currentBoothInfo = await loadBoothInfo(currentBoothId);
+        if (!currentBoothInfo) {
+            showPopup('Booth Tidak Ditemukan', 'URL booth tidak valid atau booth tidak aktif. Hubungi petugas.');
+            return;
+        }
+        // Tampilkan nama booth di halaman
+        applyBoothUI(currentBoothInfo);
+    }
+
     await loadBackgrounds();
 
-    const savedQueueId = localStorage.getItem('myQueueId');
+    // Cek apakah ada tiket tersimpan untuk booth ini
+    const savedKey = 'myQueueId_booth_' + (currentBoothId || 'default');
+    const savedQueueId = localStorage.getItem(savedKey) || localStorage.getItem('myQueueId');
     if (savedQueueId) {
         await restoreQueue(savedQueueId);
     }
@@ -41,7 +60,28 @@ function requestNotificationPermission() {
 }
 
 // ============================================
-// System Channel (Admin commands)
+// Booth UI
+// ============================================
+function applyBoothUI(booth) {
+    if (!booth) return;
+    // Update prefix indicator
+    const indicator = document.getElementById('prefix-indicator');
+    if (indicator) indicator.textContent = 'KODE: ' + booth.ticket_prefix;
+
+    // Update placeholder lacak
+    const inputLacak = document.getElementById('input-lacak');
+    if (inputLacak) inputLacak.placeholder = booth.ticket_prefix + '-...';
+
+    // Update nama booth di header
+    const boothNameEl = document.getElementById('booth-name');
+    if (boothNameEl) boothNameEl.textContent = booth.nama_booth;
+
+    // Update title halaman
+    document.title = booth.nama_booth + ' - Antrian Photobooth';
+}
+
+// ============================================
+// System Channel (Admin commands — clear cache)
 // ============================================
 let systemChannel;
 function initSystemChannel() {
@@ -49,68 +89,30 @@ function initSystemChannel() {
 
     systemChannel.on('broadcast', { event: 'clear_cache' }, (payload) => {
         if (payload.payload.action === 'wipe') {
+            const savedKey = 'myQueueId_booth_' + (currentBoothId || 'default');
+            localStorage.removeItem(savedKey);
             localStorage.removeItem('myQueueId');
             localStorage.removeItem('myPiguraQty');
             location.reload();
         }
     });
 
-    systemChannel.on('broadcast', { event: 'update_prefix' }, (payload) => {
-        const newPrefix = payload.payload.prefix;
-        applyPrefix(newPrefix);
-    });
-
-    systemChannel.subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-            setTimeout(() => {
-                systemChannel.send({
-                    type: 'broadcast',
-                    event: 'request_prefix',
-                    payload: {}
-                });
-            }, 1000);
-        }
-    });
-
-    // Also subscribe to database changes on settings table for real-time prefix sync
-    supabaseClient.channel('settings-sync')
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'settings' }, (payload) => {
-            if (payload.new && payload.new.key === 'ticket_prefix') {
-                applyPrefix(payload.new.value);
-            }
-        })
-        .subscribe();
-}
-
-function applyPrefix(newPrefix) {
-    if (!newPrefix) return;
-    localStorage.setItem('customerTicketPrefix', newPrefix);
-
-    const indicator = document.getElementById('prefix-indicator');
-    if (indicator) indicator.textContent = 'KODE: ' + newPrefix;
-
-    const inputLacak = document.getElementById('input-lacak');
-    if (inputLacak) inputLacak.placeholder = newPrefix + '-...';
-}
-
-// Load prefix from database (source of truth), then initialize channel
-async function loadPrefixFromDB() {
-    try {
-        const { data, error } = await supabaseClient
-            .from('settings')
-            .select('value')
-            .eq('key', 'ticket_prefix')
-            .single();
-        if (!error && data) {
-            applyPrefix(data.value);
-        }
-    } catch (e) {
-        console.error('Failed to load prefix from DB:', e);
+    // Listen perubahan booth prefix secara realtime
+    if (currentBoothId) {
+        supabaseClient.channel('booth-sync-' + currentBoothId)
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'booths',
+                filter: 'id=eq.' + currentBoothId }, async () => {
+                // Reload info booth jika prefix/nama berubah
+                currentBoothInfo = await loadBoothInfo(currentBoothId);
+                if (currentBoothInfo) applyBoothUI(currentBoothInfo);
+            })
+            .subscribe();
     }
+
+    systemChannel.subscribe();
 }
 
-// Initialize: load from DB first, then start channel for live updates
-loadPrefixFromDB();
+// Initialize system channel
 initSystemChannel();
 
 // ============================================
@@ -235,7 +237,6 @@ async function submitQueue() {
     }
 
     const selectedBgs = backgrounds.filter(bg => bgQuantities[bg.id] > 0);
-
     if (selectedBgs.length === 0) {
         return showPopup("Pilih Background", "Anda harus memilih minimal <b>satu background photobooth</b>!");
     }
@@ -246,47 +247,38 @@ async function submitQueue() {
     document.getElementById('ticket-number').textContent = '...';
     document.getElementById('ticket-items').innerHTML = '<div class="text-center font-bold">Mendaftarkan ke server...</div>';
 
+    if (!currentBoothId) {
+        return showPopup('Booth Tidak Diketahui', 'Buka halaman ini melalui QR Code yang disediakan panitia (URL harus menyertakan ?booth=ID).');
+    }
+
     try {
-        const { data: existingTickets, error: countError } = await supabaseClient
-            .from('queues')
-            .select('nomor_antrian')
-            .neq('status', STATUS.BATAL);
-
-        if (countError) throw countError;
-
-        const prefix = localStorage.getItem('customerTicketPrefix') || 'PB';
-
-        const uniqueNumbers = new Set(
-            (existingTickets || [])
-                .filter(t => t.nomor_antrian.startsWith(prefix + '-'))
-                .map(t => t.nomor_antrian)
-        );
-        const nextNum = uniqueNumbers.size + 1;
-        const myQueueNumber = prefix + '-' + String(nextNum).padStart(3, '0');
-
-        myQueueId = myQueueNumber;
-
-        const rowsToInsert = selectedBgs.map((bg, idx) => ({
-            nomor_antrian: myQueueId,
+        // Siapkan data backgrounds
+        const bgPayload = selectedBgs.map(bg => ({
             background_id: bg.id,
-            status: STATUS.MENUNGGU,
-            nama_lengkap: nama,
-            kelas: kelas,
-            alamat: alamat,
-            jumlah_foto: bgQuantities[bg.id],
-            pigura: idx === 0 ? piguraQty : 0
+            jumlah_foto: bgQuantities[bg.id]
         }));
 
-        const { data: insertedData, error: insertError } = await supabaseClient
-            .from('queues')
-            .insert(rowsToInsert)
-            .select();
+        // ✅ ATOMIC: generate nomor + insert — tidak ada race condition
+        const { data: rpcResult, error: rpcError } = await supabaseClient
+            .rpc('submit_queue', {
+                p_booth_id:    currentBoothId,
+                p_nama:        nama,
+                p_kelas:       kelas,
+                p_alamat:      alamat,
+                p_backgrounds: bgPayload,
+                p_pigura:      piguraQty
+            });
 
-        if (insertError) throw insertError;
+        if (rpcError) throw rpcError;
+
+        myQueueId = rpcResult.nomor_antrian;
+        const insertedData = rpcResult.rows;
 
         document.getElementById('ticket-number').textContent = myQueueId;
 
-        localStorage.setItem('myQueueId', myQueueId);
+        // Simpan ke localStorage dengan key per-booth
+        const savedKey = 'myQueueId_booth_' + currentBoothId;
+        localStorage.setItem(savedKey, myQueueId);
         localStorage.setItem('myPiguraQty', piguraQty);
 
         myTicketStatuses = {};
@@ -404,10 +396,13 @@ function renderTicketStatuses() {
 // Realtime & Waiting Queue
 // ============================================
 async function fetchWaitingQueues() {
-    const { data } = await supabaseClient
+    let query = supabaseClient
         .from('queues')
         .select('id, background_id, created_at, status')
         .eq('status', STATUS.MENUNGGU);
+    // Filter per booth jika ada
+    if (currentBoothId) query = query.eq('booth_id', currentBoothId);
+    const { data } = await query;
     allWaitingQueues = data || [];
 }
 
@@ -416,7 +411,9 @@ function subscribeMyTicket() {
         supabaseClient.removeChannel(realtimeChannel);
     }
 
-    realtimeChannel = supabaseClient.channel(`customer-all`)
+    // Channel unik per booth untuk efisiensi
+    const channelName = currentBoothId ? `customer-booth-${currentBoothId}` : 'customer-all';
+    realtimeChannel = supabaseClient.channel(channelName)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'queues' }, async payload => {
             const newRow = payload.new || payload.old;
 
@@ -515,6 +512,9 @@ async function downloadTicketImage() {
 // App Reset & Restore
 // ============================================
 function resetApp() {
+    // Hapus localStorage per booth
+    const savedKey = 'myQueueId_booth_' + (currentBoothId || 'default');
+    localStorage.removeItem(savedKey);
     localStorage.removeItem('myQueueId');
     localStorage.removeItem('myPiguraQty');
 
@@ -547,11 +547,16 @@ async function restoreQueue(queueId) {
     document.getElementById('ticket-section').classList.remove('hidden');
     document.getElementById('ticket-items').innerHTML = '<div class="text-center font-bold">Memulihkan tiket Anda...</div>';
 
-    const { data, error } = await supabaseClient
+    let query = supabaseClient
         .from('queues')
         .select('*, backgrounds(nama_background)')
         .eq('nomor_antrian', queueId)
         .in('status', ACTIVE_STATUSES);
+
+    // Jika ada booth, pastikan tiket milik booth yang sama
+    if (currentBoothId) query = query.eq('booth_id', currentBoothId);
+
+    const { data, error } = await query;
 
     if (error || !data || data.length === 0) {
         showPopup("Tiket Kadaluarsa", `Antrian <b>${queueId}</b> tidak ditemukan, dibatalkan, atau sudah selesai.`);
@@ -560,7 +565,9 @@ async function restoreQueue(queueId) {
     }
 
     myQueueId = queueId;
-    localStorage.setItem('myQueueId', myQueueId);
+    // Simpan per booth
+    const savedKey = 'myQueueId_booth_' + (currentBoothId || 'default');
+    localStorage.setItem(savedKey, myQueueId);
 
     myTicketStatuses = {};
     data.forEach(row => {

@@ -9,6 +9,38 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ============================================
+// Multi-Booth Helpers
+// ============================================
+
+/**
+ * Ambil booth_id dari URL parameter ?booth=ID
+ * Mengembalikan integer atau null jika tidak ada.
+ */
+function getBoothIdFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('booth');
+    const id = parseInt(raw, 10);
+    return isNaN(id) ? null : id;
+}
+
+/**
+ * Load info booth (nama + prefix) dari database.
+ * @param {number} boothId
+ * @returns {Promise<{id, nama_booth, ticket_prefix}|null>}
+ */
+async function loadBoothInfo(boothId) {
+    if (!boothId) return null;
+    const { data, error } = await supabaseClient
+        .from('booths')
+        .select('id, nama_booth, ticket_prefix')
+        .eq('id', boothId)
+        .eq('is_active', true)
+        .single();
+    if (error || !data) return null;
+    return data;
+}
+
+// ============================================
 // Constants
 // ============================================
 const HARGA_PER_FOTO = 40000;

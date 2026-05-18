@@ -8,12 +8,29 @@ let nextInLine = {};
 let delayedQueues = [];
 let isAudioEnabled = false;
 
+// Multi-Booth state
+let currentBoothId = null;
+let currentBoothInfo = null;
+
 // ============================================
 // Initialization
 // ============================================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     updateClock();
     setInterval(updateClock, 1000);
+
+    // Baca booth dari URL
+    currentBoothId = getBoothIdFromURL();
+    if (currentBoothId) {
+        currentBoothInfo = await loadBoothInfo(currentBoothId);
+        if (currentBoothInfo) {
+            // Tampilkan nama booth di header
+            const boothNameEl = document.getElementById('booth-name');
+            if (boothNameEl) boothNameEl.textContent = currentBoothInfo.nama_booth;
+            document.title = currentBoothInfo.nama_booth + ' - Monitor Antrian';
+        }
+    }
+
     startMonitor();
 });
 
@@ -37,12 +54,16 @@ async function loadData() {
         if (bgError) return console.error(bgError);
         backgrounds = bgs;
 
-        const { data: queues, error: qError } = await supabaseClient
+        let queueQuery = supabaseClient
             .from('queues')
             .select('*')
             .in('status', ACTIVE_STATUSES)
             .order('created_at', { ascending: true });
 
+        // Filter per booth
+        if (currentBoothId) queueQuery = queueQuery.eq('booth_id', currentBoothId);
+
+        const { data: queues, error: qError } = await queueQuery;
         if (qError) return console.error(qError);
 
         backgrounds.forEach(bg => {
@@ -114,17 +135,23 @@ function renderColumns() {
 // Realtime Subscription
 // ============================================
 function subscribeToUpdates() {
-    supabaseClient.channel('monitor-queues')
+    // Channel unik per booth
+    const channelName = currentBoothId ? `monitor-booth-${currentBoothId}` : 'monitor-queues';
+
+    supabaseClient.channel(channelName)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'queues' }, payload => {
             const newRecord = payload.new && Object.keys(payload.new).length > 0 ? payload.new : payload.old;
             const eventType = payload.eventType;
+
+            // Abaikan event dari booth lain
+            if (currentBoothId && newRecord.booth_id && newRecord.booth_id !== currentBoothId) return;
 
             if (eventType === 'UPDATE') {
                 if (newRecord.status === STATUS.DIPANGGIL) {
                     currentCalled[newRecord.background_id] = newRecord;
                     updateColumnUI(newRecord.background_id, newRecord.nomor_antrian, true, newRecord);
                 }
-                else if (newRecord.status === STATUS.SELESAI || newRecord.status === STATUS.BATAL || newRecord.status === STATUS.DITUNDA || newRecord.status === STATUS.MENUNGGU) {
+                else if ([STATUS.SELESAI, STATUS.BATAL, STATUS.DITUNDA, STATUS.MENUNGGU].includes(newRecord.status)) {
                     const current = currentCalled[newRecord.background_id];
                     if (current && current.id === newRecord.id) {
                         currentCalled[newRecord.background_id] = null;
@@ -150,13 +177,27 @@ function subscribeToUpdates() {
             }
         })
         .subscribe();
+
+    // Listen perubahan nama booth secara realtime
+    if (currentBoothId) {
+        supabaseClient.channel('monitor-booth-info-' + currentBoothId)
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'booths',
+                filter: 'id=eq.' + currentBoothId }, async () => {
+                currentBoothInfo = await loadBoothInfo(currentBoothId);
+                if (currentBoothInfo) {
+                    const boothNameEl = document.getElementById('booth-name');
+                    if (boothNameEl) boothNameEl.textContent = currentBoothInfo.nama_booth;
+                }
+            })
+            .subscribe();
+    }
 }
 
 // ============================================
 // Dynamic UI Updates
 // ============================================
 async function fetchNextInLine(bgId) {
-    const { data } = await supabaseClient
+    let query = supabaseClient
         .from('queues')
         .select('*')
         .eq('background_id', bgId)
@@ -164,6 +205,17 @@ async function fetchNextInLine(bgId) {
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle();
+
+    // Filter per booth (tidak bisa chain setelah maybeSingle, build dulu)
+    let q = supabaseClient
+        .from('queues')
+        .select('*')
+        .eq('background_id', bgId)
+        .eq('status', STATUS.MENUNGGU);
+
+    if (currentBoothId) q = q.eq('booth_id', currentBoothId);
+
+    const { data } = await q.order('created_at', { ascending: true }).limit(1).maybeSingle();
 
     const nextEl = document.getElementById(`next-bg-${bgId}`);
     if (!nextEl) return;
