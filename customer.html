@@ -53,7 +53,9 @@
                     II</span>
             </div>
             <h1 class="text-3xl md:text-4xl font-black uppercase tracking-tighter mt-2">Tiket Antrian</h1>
-            <p id="booth-name" class="font-mono text-xs font-bold bg-black text-white px-3 py-0.5 uppercase tracking-widest mt-1 hidden-if-empty"></p>
+            <p id="booth-name"
+                class="font-mono text-xs font-bold bg-black text-white px-3 py-0.5 uppercase tracking-widest mt-1 hidden-if-empty">
+            </p>
         </div>
 
         <div class="p-6 flex-1 flex flex-col relative z-0">
@@ -78,13 +80,20 @@
                     <label class="font-mono text-sm font-bold uppercase block mb-2 text-gray-700">Kelas</label>
                     <input type="text" id="input-kelas"
                         class="w-full border-2 border-black p-4 text-lg font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:translate-y-[2px]"
-                        placeholder="Contoh: 12 IPA 1">
+                        placeholder="Contoh: 12.2">
                 </div>
                 <div>
-                    <label class="font-mono text-sm font-bold uppercase block mb-2 text-gray-700">Alamat</label>
+                    <label class="font-mono text-sm font-bold uppercase block mb-2 text-gray-700">Alamat Lengkap</label>
                     <input type="text" id="input-alamat"
                         class="w-full border-2 border-black p-4 text-lg font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:translate-y-[2px]"
-                        placeholder="Contoh: Malang">
+                        placeholder="Contoh: Bululawang, Malang">
+                </div>
+                <div>
+                    <label class="font-mono text-sm font-bold uppercase block mb-2 text-gray-700">No. WhatsApp <span
+                            class="text-xs bg-neoYellow border border-black px-1">Lebih baik diisi</span></label>
+                    <input type="tel" id="input-wa"
+                        class="w-full border-2 border-black p-4 text-lg font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:translate-y-[2px]"
+                        placeholder="Contoh: 081234567890">
                 </div>
             </div>
 
@@ -106,10 +115,16 @@
                 <!-- Rendered via JS -->
             </div>
 
-            <button onclick="submitQueue()"
-                class="w-full mt-10 bg-neoCyan text-black hover:bg-black hover:text-white font-black py-5 uppercase tracking-widest text-xl border-4 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[4px] transition-all">
-                AMBIL TIKET
-            </button>
+            <div class="flex flex-col gap-2 mt-10">
+                <button id="btn-submit-queue" onclick="submitQueue()"
+                    class="w-full bg-neoCyan text-black hover:bg-black hover:text-white font-black py-5 uppercase tracking-widest text-xl border-4 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[4px] transition-all">
+                    AMBIL TIKET
+                </button>
+                <button id="btn-cancel-edit" onclick="cancelEditOrder()"
+                    class="w-full bg-neoPink text-black hover:bg-black hover:text-white font-black py-4 uppercase tracking-widest text-lg border-4 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-[4px] transition-all hidden">
+                    BATALKAN EDIT
+                </button>
+            </div>
 
             <!-- LACAK TIKET -->
             <div class="mt-8 p-0 border-4 border-black bg-white overflow-hidden shadow-[6px_6px_0px_0px_#000]">
@@ -178,6 +193,11 @@
             </div>
 
         </div>
+
+        <button id="btn-edit-order" onclick="editOrder()"
+            class="w-full mt-2 bg-neoYellow text-black border-4 border-black hover:bg-black hover:text-white transition-colors font-black py-4 uppercase tracking-widest text-lg shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-y-[6px]">
+            GANTI PESANAN
+        </button>
 
         <button onclick="downloadTicketImage()"
             class="w-full mt-2 bg-neoGreen text-black border-4 border-black hover:bg-black hover:text-white transition-colors font-black py-4 uppercase tracking-widest text-lg shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-y-[6px]">

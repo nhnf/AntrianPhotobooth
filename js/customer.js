@@ -11,6 +11,8 @@ let myTicketStatuses = {};
 let realtimeChannel = null;
 let allWaitingQueues = [];
 let notifiedStates = {};
+let isEditMode = false;
+let originalQueueId = null;
 
 // Multi-Booth state
 let currentBoothId = null;   // integer, dari URL ?booth=ID
@@ -231,6 +233,7 @@ async function submitQueue() {
     const nama = sanitizeInput(document.getElementById('input-nama').value, 100);
     const kelas = sanitizeInput(document.getElementById('input-kelas').value, 50);
     const alamat = sanitizeInput(document.getElementById('input-alamat').value, 200);
+    const noWa = sanitizeInput(document.getElementById('input-wa').value, 20);
 
     if (!nama || !kelas) {
         return showPopup("Data Belum Lengkap", "Harap isi <b>Nama</b> dan <b>Kelas/Asal</b> Anda sebelum mengambil tiket.");
@@ -244,10 +247,10 @@ async function submitQueue() {
     document.getElementById('selection-section').classList.add('hidden');
     document.getElementById('ticket-section').classList.remove('hidden');
     document.getElementById('ticket-user-info').textContent = `${nama} - ${kelas} - ${alamat}`;
-    document.getElementById('ticket-number').textContent = '...';
-    document.getElementById('ticket-items').innerHTML = '<div class="text-center font-bold">Mendaftarkan ke server...</div>';
+    document.getElementById('ticket-number').textContent = isEditMode ? originalQueueId : '...';
+    document.getElementById('ticket-items').innerHTML = '<div class="text-center font-bold">Menyimpan ke server...</div>';
 
-    if (!currentBoothId) {
+    if (!currentBoothId && !isEditMode) {
         return showPopup('Booth Tidak Diketahui', 'Buka halaman ini melalui QR Code yang disediakan panitia (URL harus menyertakan ?booth=ID).');
     }
 
@@ -258,16 +261,34 @@ async function submitQueue() {
             jumlah_foto: bgQuantities[bg.id]
         }));
 
-        // ✅ ATOMIC: generate nomor + insert — tidak ada race condition
-        const { data: rpcResult, error: rpcError } = await supabaseClient
-            .rpc('submit_queue', {
-                p_booth_id:    currentBoothId,
-                p_nama:        nama,
-                p_kelas:       kelas,
-                p_alamat:      alamat,
+        let rpcResult, rpcError;
+
+        if (isEditMode) {
+            const res = await supabaseClient.rpc('update_queue_order', {
+                p_nomor_antrian: originalQueueId,
+                p_nama: nama,
+                p_kelas: kelas,
+                p_alamat: alamat,
+                p_notes: '', // customer doesn't have notes field yet
                 p_backgrounds: bgPayload,
-                p_pigura:      piguraQty
+                p_pigura: piguraQty,
+                p_no_wa: noWa
             });
+            rpcResult = res.data;
+            rpcError = res.error;
+        } else {
+            const res = await supabaseClient.rpc('submit_queue', {
+                p_booth_id: currentBoothId,
+                p_nama: nama,
+                p_kelas: kelas,
+                p_alamat: alamat,
+                p_backgrounds: bgPayload,
+                p_pigura: piguraQty,
+                p_no_wa: noWa
+            });
+            rpcResult = res.data;
+            rpcError = res.error;
+        }
 
         if (rpcError) throw rpcError;
 
@@ -280,6 +301,11 @@ async function submitQueue() {
         const savedKey = 'myQueueId_booth_' + currentBoothId;
         localStorage.setItem(savedKey, myQueueId);
         localStorage.setItem('myPiguraQty', piguraQty);
+        
+        isEditMode = false;
+        originalQueueId = null;
+        document.getElementById('btn-submit-queue').textContent = "AMBIL TIKET";
+        document.getElementById('btn-cancel-edit').classList.add('hidden');
 
         myTicketStatuses = {};
         insertedData.forEach(row => {
@@ -388,8 +414,74 @@ function renderTicketStatuses() {
     container.innerHTML = html;
 
     const cardEl = document.getElementById('ticket-card');
-    if (isAnyCalled) cardEl.classList.add('called-state');
-    else cardEl.classList.remove('called-state');
+    const editBtn = document.getElementById('btn-edit-order');
+    let canEdit = true;
+    
+    if (isAnyCalled) {
+        cardEl.classList.add('called-state');
+    } else {
+        cardEl.classList.remove('called-state');
+    }
+    
+    // Check if any status is dipanggil or selesai
+    Object.values(myTicketStatuses).forEach(item => {
+        if (item.status === STATUS.DIPANGGIL || item.status === STATUS.SELESAI || item.status === STATUS.BATAL) {
+            canEdit = false;
+        }
+    });
+    
+    if (editBtn) {
+        if (canEdit) {
+            editBtn.classList.remove('hidden');
+        } else {
+            editBtn.classList.add('hidden');
+        }
+    }
+}
+
+// ============================================
+// Edit Order
+// ============================================
+function editOrder() {
+    isEditMode = true;
+    originalQueueId = myQueueId;
+    
+    document.getElementById('ticket-section').classList.add('hidden');
+    document.getElementById('selection-section').classList.remove('hidden');
+    
+    document.getElementById('btn-submit-queue').textContent = "SIMPAN PERUBAHAN";
+    document.getElementById('btn-cancel-edit').classList.remove('hidden');
+    
+    // Form nama/kelas/alamat is already preserved, just scroll up
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function cancelEditOrder() {
+    isEditMode = false;
+    originalQueueId = null;
+    
+    document.getElementById('selection-section').classList.add('hidden');
+    document.getElementById('ticket-section').classList.remove('hidden');
+    
+    document.getElementById('btn-submit-queue').textContent = "AMBIL TIKET";
+    document.getElementById('btn-cancel-edit').classList.add('hidden');
+    
+    // Re-render quantities from the active ticket
+    Object.keys(bgQuantities).forEach(id => {
+        bgQuantities[id] = 0;
+        if (myTicketStatuses[id]) {
+            bgQuantities[id] = myTicketStatuses[id].qty;
+        }
+        if (document.getElementById(`qty-${id}`)) {
+            document.getElementById(`qty-${id}`).textContent = bgQuantities[id];
+        }
+    });
+    
+    piguraQty = parseInt(localStorage.getItem('myPiguraQty') || '0');
+    if (document.getElementById('qty-pigura')) {
+        document.getElementById('qty-pigura').textContent = piguraQty;
+    }
+    updateTotalPrice();
 }
 
 // ============================================
@@ -530,6 +622,7 @@ function resetApp() {
     document.getElementById('input-nama').value = '';
     document.getElementById('input-kelas').value = '';
     document.getElementById('input-alamat').value = '';
+    document.getElementById('input-wa').value = '';
     document.getElementById('input-lacak').value = '';
     if (document.getElementById('qty-pigura')) document.getElementById('qty-pigura').textContent = '0';
 
@@ -583,8 +676,15 @@ async function restoreQueue(queueId) {
     const nama = data[0].nama_lengkap || '';
     const kelas = data[0].kelas || '';
     const alamat = data[0].alamat || '';
+    const noWa = data[0].no_wa || '';
     document.getElementById('ticket-user-info').textContent = `${nama} - ${kelas} - ${alamat}`;
     document.getElementById('ticket-number').textContent = myQueueId;
+    
+    // Restore form data for edit mode
+    document.getElementById('input-nama').value = nama;
+    document.getElementById('input-kelas').value = kelas;
+    document.getElementById('input-alamat').value = alamat;
+    document.getElementById('input-wa').value = noWa;
 
     await fetchWaitingQueues();
     renderTicketStatuses();

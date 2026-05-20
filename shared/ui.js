@@ -49,6 +49,46 @@ function showConfirm(title, message, confirmText, onConfirm) {
 }
 
 /**
+ * Show a prompt modal dialog with an input field.
+ * @param {string} title
+ * @param {string} message - Description text
+ * @param {string} placeholder - Input placeholder
+ * @param {string} confirmText - Confirm button text
+ * @param {Function} onConfirm - Callback receiving the input value
+ */
+function showPrompt(title, message, placeholder, confirmText, onConfirm) {
+    const titleEl = document.getElementById('popup-title');
+    titleEl.textContent = title;
+    titleEl.className = `text-xl font-black uppercase tracking-tight border-b-4 border-black pb-1 mb-4 inline-block pr-4 bg-neoCyan`;
+    
+    document.getElementById('popup-body').innerHTML = `
+        <div class="space-y-3">
+            <p class="font-bold text-sm leading-relaxed">${message}</p>
+            <input type="text" id="popup-prompt-input" placeholder="${placeholder}" class="w-full border-3 border-black p-3 font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:translate-y-[2px]" />
+        </div>
+    `;
+
+    document.getElementById('popup-actions').innerHTML = `
+        <button onclick="closePopup()" class="flex-1 bg-white text-black font-black uppercase px-4 py-3 hover:bg-gray-200 transition-colors border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000]">BATAL</button>
+        <button id="btn-confirm-action" class="flex-1 bg-neoGreen text-black font-black uppercase px-4 py-3 hover:bg-black hover:text-white transition-colors border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000]">${confirmText}</button>
+    `;
+
+    document.getElementById('btn-confirm-action').onclick = () => {
+        const inputVal = document.getElementById('popup-prompt-input').value;
+        closePopup();
+        onConfirm(inputVal);
+    };
+
+    _openPopup();
+    
+    // Focus the input
+    setTimeout(() => {
+        const input = document.getElementById('popup-prompt-input');
+        if (input) input.focus();
+    }, 100);
+}
+
+/**
  * Close the popup modal.
  */
 function closePopup() {

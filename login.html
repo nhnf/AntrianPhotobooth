@@ -74,11 +74,13 @@
     </div>
 
     <script>
-        // If already logged in, redirect to admin
+        // If already logged in, redirect to respective dashboard
         (async () => {
             const session = await getSession();
             if (session) {
-                window.location.href = 'admin.html';
+                const profile = await getUserProfile(session.user.id);
+                const role = profile ? profile.role : 'foto';
+                window.location.href = getRedirectByRole(role);
             }
         })();
 
@@ -101,7 +103,7 @@
             const result = await loginWithEmail(email, password);
 
             if (result.success) {
-                window.location.href = 'admin.html';
+                window.location.href = getRedirectByRole(result.role);
             } else {
                 errorEl.textContent = 'Login gagal: ' + result.error;
                 errorEl.classList.remove('hidden');

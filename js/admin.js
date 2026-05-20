@@ -8,16 +8,14 @@ let allBooths = [];
 let currentBoothId = null; // booth yang sedang dikelola admin
 const cardColors = ['bg-neoYellow', 'bg-neoPink', 'bg-neoGreen'];
 
-const systemChannel = supabaseClient.channel('system-events', {
-    config: { broadcast: { self: true } }
-});
+
 
 // ============================================
 // Initialization
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
-    const user = await checkAuth();
-    if (!user) return;
+    const authResult = await checkAuthWithRole(['admin', 'foto']);
+    if (!authResult) return;
 
     await loadBooths();
     await loadBackgrounds();
@@ -25,7 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (allBooths.length > 0) {
         currentBoothId = allBooths[0].id;
         renderBoothSelector();
-        renderBoothManagement();
+
         await fetchQueues();
     } else {
         document.getElementById('admin-columns').innerHTML =
@@ -33,7 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     subscribeToUpdates();
-    systemChannel.subscribe();
+
 });
 
 // ============================================
@@ -70,156 +68,7 @@ async function switchBooth(id) {
     await fetchQueues();
 }
 
-// ============================================
-// Booth Management UI
-// ============================================
-function renderBoothManagement() {
-    const container = document.getElementById('booth-management-list');
-    if (!container) return;
-    container.innerHTML = allBooths.map(b => `
-        <div class="flex flex-wrap items-center gap-2 p-3 border-2 border-black bg-white shadow-[2px_2px_0px_0px_#000]">
-            <span class="font-black uppercase flex-1 min-w-[120px]">${b.nama_booth}</span>
-            <span class="font-mono bg-neoCyan border-2 border-black px-2 py-0.5 text-sm font-bold">${b.ticket_prefix}</span>
-            <input type="text" id="edit-name-${b.id}" value="${b.nama_booth}"
-                class="border-2 border-black px-2 py-1 text-sm font-bold w-32 focus:outline-none focus:ring-2 focus:ring-neoCyan">
-            <input type="text" id="edit-prefix-${b.id}" value="${b.ticket_prefix}"
-                class="border-2 border-black px-2 py-1 text-sm font-bold w-20 uppercase focus:outline-none focus:ring-2 focus:ring-neoCyan"
-                maxlength="5">
-            <button onclick="saveBooth(${b.id})"
-                class="neo-button bg-neoGreen font-bold uppercase py-1 px-3 text-sm">Simpan</button>
-            <button onclick="showBoothQR(${b.id})"
-                class="neo-button bg-neoCyan font-bold uppercase py-1 px-3 text-sm">📱 QR Customer</button>
-            <button onclick="copyBoothURL(${b.id}, 'monitor')"
-                class="neo-button bg-neoYellow font-bold uppercase py-1 px-3 text-sm">📺 Monitor</button>
-            <button onclick="deleteBooth(${b.id})"
-                class="neo-button bg-white border-neoRed font-bold uppercase py-1 px-3 text-sm text-red-600">Hapus</button>
-        </div>
-    `).join('');
-}
 
-async function saveBooth(boothId) {
-    const nama = document.getElementById(`edit-name-${boothId}`)?.value.trim();
-    const prefix = document.getElementById(`edit-prefix-${boothId}`)?.value.trim().toUpperCase();
-    if (!nama || !prefix) return showPopup('Error', 'Nama dan prefix tidak boleh kosong.', true);
-
-    const { error } = await supabaseClient
-        .from('booths')
-        .update({ nama_booth: nama, ticket_prefix: prefix })
-        .eq('id', boothId);
-
-    if (error) return showPopup('Error', 'Gagal menyimpan: ' + error.message, true);
-
-    await loadBooths();
-    renderBoothSelector();
-    renderBoothManagement();
-    showPopup('Sukses', `✅ Booth berhasil diperbarui! Prefix: <b>${prefix}</b>`);
-}
-
-async function addBooth() {
-    const nama = document.getElementById('new-booth-name')?.value.trim();
-    const prefix = document.getElementById('new-booth-prefix')?.value.trim().toUpperCase();
-    if (!nama || !prefix) return showPopup('Error', 'Isi nama booth dan prefix terlebih dahulu.', true);
-
-    const { error } = await supabaseClient
-        .from('booths')
-        .insert({ nama_booth: nama, ticket_prefix: prefix, is_active: true });
-
-    if (error) return showPopup('Error', 'Gagal menambah booth: ' + error.message, true);
-
-    document.getElementById('new-booth-name').value = '';
-    document.getElementById('new-booth-prefix').value = '';
-
-    await loadBooths();
-    renderBoothSelector();
-    renderBoothManagement();
-    showPopup('Sukses', `✅ Booth <b>${nama}</b> berhasil ditambahkan!`);
-}
-
-async function deleteBooth(boothId) {
-    if (allBooths.length <= 1) return showPopup('Tidak Bisa', 'Minimal harus ada 1 booth aktif.', true);
-    showConfirm('Hapus Booth', 'Yakin ingin menghapus booth ini? Antrian yang sudah ada akan tetap tersimpan (booth_id menjadi null).',
-        'YA, HAPUS', async () => {
-            const { error } = await supabaseClient.from('booths').delete().eq('id', boothId);
-            if (error) return showPopup('Error', 'Gagal menghapus: ' + error.message, true);
-            await loadBooths();
-            if (currentBoothId === boothId) currentBoothId = allBooths[0]?.id || null;
-            renderBoothSelector();
-            renderBoothManagement();
-            await fetchQueues();
-            showPopup('Sukses', '✅ Booth berhasil dihapus.');
-        });
-}
-
-function copyBoothURL(boothId, page) {
-    const base = window.location.origin + window.location.pathname.replace('admin.html', '');
-    const url = `${base}${page}.html?booth=${boothId}`;
-    navigator.clipboard.writeText(url).then(() => {
-        showPopup('URL Disalin!', `URL <b>${page}</b> untuk booth ini:<br><br><code class="bg-gray-100 px-2 py-1 break-all text-xs">${url}</code><br><br>Berhasil disalin ke clipboard.`);
-    });
-}
-
-function showBoothQR(boothId) {
-    const booth = allBooths.find(b => b.id === boothId);
-    if (!booth) return;
-
-    const base = window.location.origin + window.location.pathname.replace('admin.html', '');
-    const url = `${base}customer.html?booth=${boothId}`;
-
-    const htmlContent = `
-        <div class="flex flex-col items-center justify-center p-2">
-            <p class="text-xs font-mono text-gray-500 mb-4 text-center">Scan QR Code ini untuk mendaftar antrian di <b>${booth.nama_booth}</b></p>
-            <div id="qrcode-container" class="border-4 border-black p-4 bg-white shadow-[4px_4px_0px_0px_#000] mb-4 flex items-center justify-center"></div>
-            <input type="text" readonly id="booth-share-link" value="${url}" 
-                class="w-full text-center border-2 border-black p-2 font-mono text-xs mb-4 bg-gray-50 outline-none select-all" onclick="this.select()">
-            <div class="flex gap-2 w-full">
-                <button onclick="downloadQRCodeImage('${booth.nama_booth}')" 
-                    class="flex-1 bg-neoGreen text-black font-black uppercase px-3 py-2.5 hover:bg-black hover:text-white transition-colors border-4 border-black shadow-[2px_2px_0px_0px_#000] hover:shadow-[4px_4px_0px_0px_#000] hover:-translate-y-[2px] text-xs">💾 Simpan PNG</button>
-                <button onclick="navigator.clipboard.writeText('${url}'); showPopup('Disalin!', 'Link pendaftaran berhasil disalin ke clipboard.')" 
-                    class="flex-1 bg-neoCyan text-black font-black uppercase px-3 py-2.5 hover:bg-black hover:text-white transition-colors border-4 border-black shadow-[2px_2px_0px_0px_#000] hover:shadow-[4px_4px_0px_0px_#000] hover:-translate-y-[2px] text-xs">📋 Salin Link</button>
-            </div>
-        </div>
-    `;
-
-    showPopup(`QR — ${booth.nama_booth}`, htmlContent);
-
-    // Render QR Code immediately after modal is active
-    setTimeout(() => {
-        const container = document.getElementById("qrcode-container");
-        if (container) {
-            container.innerHTML = ""; // Clear
-            new QRCode(container, {
-                text: url,
-                width: 180,
-                height: 180,
-                colorDark : "#000000",
-                colorLight : "#ffffff",
-                correctLevel : QRCode.CorrectLevel.H
-            });
-        }
-    }, 100);
-}
-
-function downloadQRCodeImage(boothName) {
-    const img = document.querySelector("#qrcode-container img");
-    const filename = `QR-${boothName.replace(/\s+/g, '-').toLowerCase()}.png`;
-
-    if (img && img.src) {
-        const a = document.createElement("a");
-        a.href = img.src;
-        a.download = filename;
-        a.click();
-    } else {
-        const canvas = document.querySelector("#qrcode-container canvas");
-        if (canvas) {
-            const a = document.createElement("a");
-            a.href = canvas.toDataURL("image/png");
-            a.download = filename;
-            a.click();
-        } else {
-            showPopup("Error", "Gagal mengunduh QR Code. Silakan coba lagi.", true);
-        }
-    }
-}
 
 // ============================================
 // Data Loading & Queues
@@ -393,127 +242,4 @@ async function markCurrentAs(status, bgId) {
     }
 }
 
-// ============================================
-// Cache & Reset (per booth)
-// ============================================
-async function broadcastClearCache() {
-    showConfirm('Wipe Cache', '⚠️ Tombol ini akan menghapus paksa cache tiket di SEMUA HP pelanggan booth ini. Lanjutkan?',
-        'YA, WIPE', async () => {
-            await systemChannel.send({ type: 'broadcast', event: 'clear_cache', payload: { action: 'wipe' } });
-            showPopup('Sukses', '✅ Sinyal pembersihan cache telah disebarkan!');
-        });
-}
 
-function resetAllQueues() {
-    const booth = allBooths.find(b => b.id === currentBoothId);
-    showConfirm('Reset Antrian Booth',
-        `Yakin ingin menghapus SEMUA antrian booth <b>${booth?.nama_booth || ''}</b>? Data terhapus permanen.`,
-        'YA, RESET', async () => {
-            try {
-                const { data: rows } = await supabaseClient.from('queues').select('id').eq('booth_id', currentBoothId);
-                if (rows && rows.length > 0) {
-                    await supabaseClient.from('queues').delete().in('id', rows.map(r => r.id));
-                }
-                await systemChannel.send({ type: 'broadcast', event: 'clear_cache', payload: { action: 'wipe' } });
-                showPopup('Sukses', '✅ Semua antrian booth ini dihapus!');
-                fetchQueues();
-            } catch (e) { showPopup('Error', 'Gagal reset: ' + e.message, true); }
-        });
-}
-
-// ============================================
-// Export / PDF
-// ============================================
-async function exportData() {
-    const { data, error } = await supabaseClient.from('queues').select('*').eq('booth_id', currentBoothId);
-    if (error) return showPopup('Error', error.message, true);
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.download = `backup-booth${currentBoothId}-${new Date().toISOString().slice(0,10)}.json`;
-    a.href = url; a.click(); URL.revokeObjectURL(url);
-    showPopup('Berhasil', '✅ Data antrian booth ini berhasil diekspor.');
-}
-
-function importData(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        try {
-            const data = JSON.parse(e.target.result);
-            if (!Array.isArray(data)) throw new Error('Format tidak valid.');
-            showConfirm('Import Data', `Ditemukan ${data.length} baris. Import akan MENGGANTIKAN data booth ini. Lanjutkan?`,
-                'YA, IMPORT', async () => {
-                    const { data: rows } = await supabaseClient.from('queues').select('id').eq('booth_id', currentBoothId);
-                    if (rows?.length) await supabaseClient.from('queues').delete().in('id', rows.map(r => r.id));
-                    const clean = data.map(({ id, ...rest }) => ({ ...rest, booth_id: currentBoothId }));
-                    const { error } = await supabaseClient.from('queues').insert(clean);
-                    if (error) throw error;
-                    showPopup('Berhasil', '✅ Import berhasil!');
-                    fetchQueues();
-                    document.getElementById('import-file').value = '';
-                });
-        } catch (err) { showPopup('Error', 'Gagal membaca file: ' + err.message, true); }
-    };
-    reader.readAsText(file);
-}
-
-async function downloadPDF() {
-    const booth = allBooths.find(b => b.id === currentBoothId);
-    const { data, error } = await supabaseClient.from('queues')
-        .select('*, backgrounds(nama_background)')
-        .eq('booth_id', currentBoothId)
-        .neq('status', STATUS.BATAL)
-        .order('created_at', { ascending: true });
-
-    if (error) return showPopup('Error', error.message, true);
-    if (!data || data.length === 0) return showPopup('Tidak Ada Data', 'Belum ada data pendaftar.');
-
-    const grouped = {};
-    data.forEach(row => {
-        if (!grouped[row.nomor_antrian]) {
-            grouped[row.nomor_antrian] = { nomor: row.nomor_antrian, nama: row.nama_lengkap || '-', kelas: row.kelas || '-', alamat: row.alamat || '-', items: [], totalFoto: 0, totalPigura: 0 };
-        }
-        grouped[row.nomor_antrian].items.push({ background: row.backgrounds?.nama_background || '-', qty: row.jumlah_foto || 0, status: row.status });
-        grouped[row.nomor_antrian].totalFoto += (row.jumlah_foto || 0);
-        grouped[row.nomor_antrian].totalPigura += (row.pigura || 0);
-    });
-
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('landscape', 'mm', 'a4');
-    doc.setFontSize(20); doc.setFont('helvetica', 'bold');
-    doc.text(`LAPORAN PENDAFTAR — ${booth?.nama_booth?.toUpperCase() || 'PHOTOBOOTH'}`, 148.5, 18, { align: 'center' });
-    doc.setFontSize(9);
-    const now = new Date();
-    doc.text(`Dicetak: ${now.toLocaleString('id-ID')}`, 148.5, 28, { align: 'center' });
-
-    let no = 1, grandFoto = 0, grandPigura = 0, grandHarga = 0;
-    const tableData = Object.values(grouped).map(g => {
-        const harga = g.totalFoto * HARGA_PER_FOTO + g.totalPigura * HARGA_PIGURA;
-        grandFoto += g.totalFoto; grandPigura += g.totalPigura; grandHarga += harga;
-        const detail = g.items.map(i => `- ${i.background} (${i.qty}x) [${i.status.toUpperCase()}]`);
-        if (g.totalPigura > 0) detail.push(`- Pigura (${g.totalPigura}x)`);
-        return [no++, g.nomor, g.nama, g.kelas, detail.join('\n'), formatCurrency(harga)];
-    });
-
-    doc.autoTable({
-        startY: 33,
-        head: [['No', 'Tiket', 'Nama', 'Kelas/Asal', 'Pembelian', 'Total']],
-        body: tableData,
-        theme: 'grid',
-        styles: { fontSize: 8, cellPadding: 2, lineWidth: 0.3 },
-        headStyles: { fillColor: [253, 224, 71], textColor: [0,0,0], fontStyle: 'bold', halign: 'center' },
-        columnStyles: { 0: { halign:'center', cellWidth:10 }, 1: { halign:'center', cellWidth:22, fontStyle:'bold' }, 2: { cellWidth:40 }, 3: { cellWidth:35 }, 4: { cellWidth:100 }, 5: { halign:'right', cellWidth:38, fontStyle:'bold' } },
-    });
-
-    const fy = doc.lastAutoTable.finalY + 4;
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
-    doc.setFillColor(103, 232, 249);
-    doc.rect(14, fy, doc.internal.pageSize.width - 28, 10, 'F');
-    doc.rect(14, fy, doc.internal.pageSize.width - 28, 10, 'S');
-    doc.text(`TOTAL: ${Object.keys(grouped).length} Pendaftar | ${grandFoto} Foto | ${grandPigura} Pigura | ${formatCurrency(grandHarga)}`, 148.5, fy + 7, { align: 'center' });
-
-    doc.save(`Laporan-${booth?.nama_booth || 'Booth'}-${now.toISOString().slice(0,10)}.pdf`);
-    showPopup('Sukses', '✅ Laporan PDF berhasil diunduh!');
-}

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Pengambilan - Photobooth</title>
+    <meta name="description" content="Dashboard Pengambilan Foto Sistem Antrian Photobooth Mediatech An-Nur II">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <script src="shared/tailwind-config.js"></script>
+    <link rel="stylesheet" href="shared/styles.css">
+    <style>
+        .table-row {
+            transition: background-color 0.1s ease;
+        }
+
+        .table-row:hover {
+            background-color: #fef9c3;
+        }
+
+        .table-scroll {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .table-scroll::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .table-scroll::-webkit-scrollbar-track {
+            background: #fff;
+            border-top: 2px solid #000;
+        }
+
+        .table-scroll::-webkit-scrollbar-thumb {
+            background: #000;
+        }
+
+        .btn-pickup {
+            transition: all 0.15s ease;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .btn-pickup:hover {
+            transform: translateY(-2px);
+            box-shadow: 4px 4px 0px 0px #000;
+        }
+
+        .btn-pickup:active {
+            transform: translateY(1px);
+            box-shadow: 0px 0px 0px 0px #000;
+        }
+    </style>
+</head>
+
+<body class="flex flex-col min-h-screen bg-bgLight">
+
+    <!-- Load shared modules -->
+    <script src="shared/config.js"></script>
+    <script src="shared/ui.js"></script>
+    <script src="js/auth.js"></script>
+
+    <!-- CUSTOM POPUP MODAL -->
+    <div id="custom-popup"
+        class="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-[100] flex items-center justify-center p-4 hidden transition-opacity duration-200">
+        <div class="bg-white border-4 border-black shadow-[8px_8px_0px_0px_#000] p-6 max-w-md w-full transform transition-all duration-300 scale-95 opacity-0"
+            id="popup-content">
+            <h2 id="popup-title"
+                class="text-xl font-black uppercase tracking-tight border-b-4 border-black pb-1 mb-4 inline-block pr-4">
+                Perhatian</h2>
+            <div id="popup-body" class="font-bold mb-6 text-sm leading-relaxed"></div>
+            <div id="popup-actions" class="flex gap-3">
+                <button onclick="closePopup()"
+                    class="flex-1 bg-black text-white font-black uppercase px-4 py-3 hover:bg-neoCyan hover:text-black transition-colors border-4 border-black shadow-[4px_4px_0px_0px_#000]">TUTUP</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HEADER -->
+    <header
+        class="p-3 md:p-4 flex flex-col xl:flex-row justify-between items-start xl:items-center border-b-4 border-black bg-white shrink-0 shadow-[0px_4px_0px_0px_#000] z-20 gap-4">
+        <div class="flex items-center gap-3 md:gap-4">
+            <img src="logo-mm.png" alt="Logo" class="h-8 md:h-12 hidden sm:block">
+            <div>
+                <h1
+                    class="text-2xl md:text-4xl font-black uppercase tracking-tighter leading-none flex items-center gap-2 text-black">
+                    <img src="logo-mm.png" alt="Logo" class="h-6 sm:hidden">
+                    Pengambilan
+                </h1>
+                <p class="font-mono text-[10px] md:text-sm font-bold text-black bg-neoCyan border-2 border-black px-1 inline-block uppercase mt-0.5"
+                    id="user-role-badge">
+                    Staf Pengambilan</p>
+            </div>
+        </div>
+        <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full xl:w-auto items-center">
+            <div class="col-span-2 flex gap-2">
+                <select id="booth-selector" onchange="switchBooth(this.value)"
+                    class="flex-1 neo-button bg-black text-white font-bold py-2 px-3 text-sm uppercase outline-none cursor-pointer">
+                    <option value="all">Semua Booth</option>
+                </select>
+            </div>
+            <!-- Admin can go back to sekretariat -->
+            <a href="sekretariat.html" id="btn-to-sekretariat"
+                class="hidden w-full sm:w-auto neo-button bg-neoYellow font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm text-center">⚙️
+                Sekretariat</a>
+            <button onclick="logout()"
+                class="col-span-2 sm:col-span-1 sm:w-auto neo-button bg-white font-bold uppercase py-2 md:py-3 px-3 md:px-6 text-xs md:text-sm border-2 border-black">🔒
+                Logout</button>
+        </div>
+    </header>
+
+    <!-- STATS -->
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 p-4 max-w-[1920px] mx-auto w-full">
+        <div class="bg-white border-4 border-black p-3 md:p-4 shadow-[4px_4px_0px_0px_#000]">
+            <h3 class="font-mono text-[10px] md:text-xs font-bold uppercase text-gray-500 mb-1">Total Antrean</h3>
+            <div class="text-2xl md:text-4xl font-black" id="stat-total-selesai">0</div>
+        </div>
+        <div class="bg-neoYellow border-4 border-black p-3 md:p-4 shadow-[4px_4px_0px_0px_#000]">
+            <h3 class="font-mono text-[10px] md:text-xs font-bold uppercase mb-1">Belum Diambil</h3>
+            <div class="text-2xl md:text-4xl font-black" id="stat-belum-diambil">0</div>
+        </div>
+        <div
+            class="bg-neoGreen border-4 border-black p-3 md:p-4 shadow-[4px_4px_0px_0px_#000] col-span-2 md:col-span-1">
+            <h3 class="font-mono text-[10px] md:text-xs font-bold uppercase mb-1">Sudah Diambil</h3>
+            <div class="text-2xl md:text-4xl font-black" id="stat-sudah-diambil">0</div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 p-4 max-w-[1920px] mx-auto w-full flex flex-col gap-4">
+
+        <!-- Toolbar -->
+        <div class="flex flex-col md:flex-row gap-3 bg-white p-3 border-4 border-black shadow-[4px_4px_0px_0px_#000]">
+            <div class="flex-1 relative">
+                <input type="text" id="search-input" placeholder="Cari nomor antrian atau nama customer..."
+                    class="w-full border-2 border-black p-2 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-neoCyan pr-10">
+                <span class="absolute right-3 top-1/2 -translate-y-1/2">🔍</span>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="setFilter('all')" id="filter-all"
+                    class="flex-1 md:flex-none bg-black text-white px-4 py-2 font-bold text-xs uppercase border-2 border-black transition-colors">Semua</button>
+                <button onclick="setFilter('belum')" id="filter-belum"
+                    class="flex-1 md:flex-none bg-white text-black px-4 py-2 font-bold text-xs uppercase border-2 border-black hover:bg-gray-100 transition-colors">Belum</button>
+                <button onclick="setFilter('sudah')" id="filter-sudah"
+                    class="flex-1 md:flex-none bg-white text-black px-4 py-2 font-bold text-xs uppercase border-2 border-black hover:bg-gray-100 transition-colors">Sudah</button>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div
+            class="bg-white border-4 border-black shadow-[8px_8px_0px_0px_#000] overflow-hidden flex flex-col flex-1 min-h-[400px]">
+            <div class="p-3 border-b-4 border-black flex justify-between items-center bg-gray-50 shrink-0">
+                <h2 class="font-black uppercase tracking-tight flex items-center gap-2">
+                    <span
+                        class="bg-black text-white w-6 h-6 flex items-center justify-center rounded-full text-xs">📸</span>
+                    Data Pengambilan
+                </h2>
+                <span id="table-count" class="font-mono text-xs font-bold px-2 py-1 bg-black text-white">0 data</span>
+            </div>
+            <div class="table-scroll flex-1 relative">
+                <table class="w-full text-left border-collapse min-w-[800px]">
+                    <thead
+                        class="sticky top-0 bg-neoYellow border-b-4 border-black z-10 shadow-[0px_2px_0px_0px_rgba(0,0,0,1)]">
+                        <tr>
+                            <th class="p-3 font-mono text-xs font-bold uppercase w-12 text-center">No</th>
+                            <th class="p-3 font-mono text-xs font-bold uppercase w-24">Tiket</th>
+                            <th class="p-3 font-mono text-xs font-bold uppercase w-24">Booth</th>
+                            <th class="p-3 font-mono text-xs font-bold uppercase min-w-[150px]">Nama</th>
+                            <th class="p-3 font-mono text-xs font-bold uppercase w-24">Kelas</th>
+                            <th class="p-3 font-mono text-xs font-bold uppercase min-w-[150px]">Alamat</th>
+                            <th class="p-3 font-mono text-xs font-bold uppercase w-36">No WA</th>
+                            <th class="p-3 font-mono text-xs font-bold uppercase w-48">Item Cetak</th>
+                            <th class="p-3 font-mono text-xs font-bold uppercase w-32 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="customer-table-body" class="bg-white divide-y-2 divide-black/10">
+                        <!-- Data will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/pengambilan.js"></script>
+</body>
+
+</html>
