@@ -94,6 +94,7 @@ function groupCustomers() {
                 booth_id: row.booth_id,
                 created_at: row.created_at,
                 payment_status: row.payment_status || 'belum_lunas',
+                payment_method: row.payment_method || null,
                 notes: row.notes || '',
                 items: [],
                 totalFoto: 0,
@@ -117,6 +118,7 @@ function groupCustomers() {
         // Keep the latest notes and payment status
         if (row.notes) g.notes = row.notes;
         if (row.payment_status) g.payment_status = row.payment_status;
+        if (row.payment_method) g.payment_method = row.payment_method;
         if (row.no_wa) g.no_wa = row.no_wa;
     });
 
@@ -162,10 +164,30 @@ function renderCalledPanel() {
     const bgColors = ['bg-neoCyan', 'bg-neoPink', 'bg-neoYellow', 'bg-neoGreen'];
 
     // Kumpulkan semua antrian yang ditunda dari semua background
-    const allDelayed = allCustomerData.filter(q =>
+    const allDelayedRaw = allCustomerData.filter(q =>
         q.status === STATUS.DITUNDA &&
         (currentBoothFilter === 'all' || q.booth_id === parseInt(currentBoothFilter))
     );
+
+    // Filter agar unik berdasarkan nomor_antrian
+    const allDelayed = [];
+    allDelayedRaw.forEach(q => {
+        if (!allDelayed.find(u => u.nomor_antrian === q.nomor_antrian)) {
+            allDelayed.push(q);
+        }
+    });
+
+    // Simpan state focus pencarian agar tidak hilang saat realtime update
+    let activeSearch = null;
+    let selStart = 0;
+    let selEnd = 0;
+    const searchEl = document.getElementById('search-delayed');
+    if (searchEl && document.activeElement === searchEl) {
+        activeSearch = searchEl.value;
+        selStart = searchEl.selectionStart;
+        selEnd = searchEl.selectionEnd;
+    }
+
 
     // Render kartu per background
     const bgCards = backgrounds.map((bg, index) => {
@@ -174,11 +196,12 @@ function renderCalledPanel() {
             (currentBoothFilter === 'all' || q.booth_id === parseInt(currentBoothFilter))
         );
         const currentCalled = bgQueues.find(q => q.status === STATUS.DIPANGGIL);
-        const waitingList = bgQueues.filter(q => q.status === STATUS.MENUNGGU);
+        const waitingList = bgQueues
+            .filter(q => q.status === STATUS.MENUNGGU)
+            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); // Ascending (oldest first)
 
-        // Siapa yang berikutnya (paling atas waiting list yang tidak sedang dipanggil di BG lain)
-        const calledNomors = allCustomerData.filter(q => q.status === STATUS.DIPANGGIL).map(q => q.nomor_antrian);
-        const nextInQueue = waitingList.find(q => !calledNomors.includes(q.nomor_antrian));
+        // Siapa yang berikutnya (sesuai dengan urutan dashboard monitor)
+        const nextInQueue = waitingList[0];
 
         const headerColor = bgColors[index % bgColors.length];
 
@@ -239,15 +262,19 @@ function renderCalledPanel() {
             <span class="font-black uppercase text-white text-sm tracking-widest">Ditunda</span>
         </div>
         <!-- Sub-header -->
-        <div class="border-b-2 border-black px-3 py-1.5 bg-gray-100 text-center">
-            <span class="font-mono text-[10px] font-bold uppercase text-gray-500">Lapor Petugas</span>
+        <div class="border-b-2 border-black px-2 py-1.5 bg-gray-100 flex flex-col gap-1.5">
+            <span class="font-mono text-[10px] font-bold uppercase text-gray-500 text-center">Lapor Petugas</span>
+            <input type="text" id="search-delayed" placeholder="Cari tiket..." 
+                class="w-full text-xs font-bold font-mono p-1.5 border-2 border-black focus:outline-none focus:ring-2 focus:ring-neoCyan"
+                value="${searchEl ? searchEl.value : ''}"
+                oninput="filterDelayed(this.value)">
         </div>
         <!-- List -->
-        <div class="flex-1 overflow-y-auto p-2 space-y-2 ${allDelayed.length === 0 ? 'flex items-center justify-center' : ''}">
+        <div class="flex-1 overflow-y-auto p-2 space-y-2 max-h-[280px] ${allDelayed.length === 0 ? 'flex items-center justify-center' : ''}" id="delayed-list-container">
             ${allDelayed.length === 0
                 ? '<span class="font-mono text-[10px] text-gray-400 font-bold uppercase text-center">Tidak ada</span>'
                 : allDelayed.map(q => `
-                    <div class="border-2 border-black p-2 bg-white shadow-[2px_2px_0px_0px_#000]">
+                    <div class="delayed-item border-2 border-black p-2 bg-white shadow-[2px_2px_0px_0px_#000]">
                         <div class="font-black text-base">${q.nomor_antrian}</div>
                         <div class="font-mono text-[10px] uppercase font-bold text-gray-600 truncate">${q.nama_lengkap || '-'}</div>
                         <button onclick="returnToQueueSekretariat('${q.nomor_antrian}')"
@@ -258,12 +285,49 @@ function renderCalledPanel() {
                 `).join('')}
         </div>
         ${allDelayed.length > 0 ? `
-        <div class="border-t-4 border-black bg-gray-100 px-3 py-1.5 text-center font-mono text-[10px] font-bold uppercase text-gray-500">
-            Total: ${allDelayed.length}
+        <div class="border-t-4 border-black bg-gray-100 px-3 py-1.5 flex justify-between items-center font-mono text-[10px] font-bold uppercase text-gray-500">
+            <span>Total:</span>
+            <span id="delayed-total-count">${allDelayed.length}</span>
         </div>` : ''}
     </div>`;
 
     panel.innerHTML = bgCards + ditundaPanel;
+
+    // Kembalikan focus jika tadi sedang mengetik
+    if (activeSearch !== null) {
+        const newSearchEl = document.getElementById('search-delayed');
+        if (newSearchEl) {
+            newSearchEl.focus();
+            newSearchEl.setSelectionRange(selStart, selEnd);
+        }
+    }
+    
+    // Terapkan filter jika ada text
+    const currentQuery = document.getElementById('search-delayed')?.value || '';
+    if (currentQuery) {
+        filterDelayed(currentQuery);
+    }
+}
+
+function filterDelayed(query) {
+    query = query.toLowerCase();
+    const items = document.querySelectorAll('.delayed-item');
+    let visibleCount = 0;
+    
+    items.forEach(item => {
+        const text = item.innerText.toLowerCase();
+        if (text.includes(query)) {
+            item.style.display = 'block';
+            visibleCount++;
+        } else {
+            item.style.display = 'none';
+        }
+    });
+
+    const totalEl = document.getElementById('delayed-total-count');
+    if (totalEl) {
+        totalEl.textContent = visibleCount;
+    }
 }
 
 async function markCurrentAsSekretariat(status, bgId) {
@@ -296,10 +360,11 @@ async function callNextSekretariat(bgId) {
     // Pastikan booth sudah difilter jika diperlukan
     const bgQueues = allCustomerData.filter(q => q.background_id === bgId && (currentBoothFilter === 'all' || q.booth_id === parseInt(currentBoothFilter)));
     const currentCalled = bgQueues.find(q => q.status === STATUS.DIPANGGIL);
-    
-    // Cari yang masih menunggu dan belum pernah dipanggil (admin logic)
-    const calledNomors = bgQueues.filter(q => q.status === STATUS.DIPANGGIL).map(q => q.nomor_antrian);
-    const nextWaiting = bgQueues.find(q => q.status === STATUS.MENUNGGU && !calledNomors.includes(q.nomor_antrian));
+    // Cari yang masih menunggu sesuai dengan urutan dashboard monitor
+    const waitingList = bgQueues
+        .filter(q => q.status === STATUS.MENUNGGU)
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); // Ascending (oldest first)
+    const nextWaiting = waitingList[0];
 
     if (!nextWaiting) {
         const anyWaiting = bgQueues.find(q => q.status === STATUS.MENUNGGU);
@@ -523,6 +588,8 @@ function renderCustomerTable() {
                 <div class="font-mono text-[10px] text-gray-500">${c.totalFoto} foto${c.totalPigura > 0 ? ` + ${c.totalPigura} pigura` : ''}</div>
             </td>
             <td class="p-3 text-center">
+                ${c.payment_method === 'online' ? '<div class="text-[10px] font-black uppercase mb-1 text-neoCyan bg-black px-1">💳 ONLINE</div>' : 
+                  c.payment_method === 'tunai' ? '<div class="text-[10px] font-black uppercase mb-1 text-black bg-neoYellow border border-black px-1">💵 TUNAI</div>' : ''}
                 <button onclick="togglePayment('${c.nomor_antrian}')"
                     class="payment-badge inline-block px-3 py-2 font-black text-xs uppercase border-3 border-black shadow-[2px_2px_0px_0px_#000] ${isLunas ? 'bg-neoGreen' : 'bg-neoRed'}">
                     ${isLunas ? '✅ LUNAS' : '❌ BELUM'}

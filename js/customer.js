@@ -227,16 +227,32 @@ function updateTotalPrice() {
 }
 
 // ============================================
+// Payment UI Handlers (Form)
+// ============================================
+function updatePaymentUI() {
+    const isOnline = document.querySelector('input[name="payment_method"]:checked').value === 'online';
+    const channelsContainer = document.getElementById('online-channels-container');
+    if (isOnline) {
+        channelsContainer.classList.remove('hidden');
+    } else {
+        channelsContainer.classList.add('hidden');
+    }
+}
+
+// ============================================
 // Submit Queue
 // ============================================
+let pendingQueueData = null;
+
 async function submitQueue() {
-    const nama = sanitizeInput(document.getElementById('input-nama').value, 100);
-    const kelas = sanitizeInput(document.getElementById('input-kelas').value, 50);
-    const alamat = sanitizeInput(document.getElementById('input-alamat').value, 200);
+    const nama = sanitizeInput(document.getElementById('input-nama').value);
+    const kelas = sanitizeInput(document.getElementById('input-kelas').value);
+    const alamat = sanitizeInput(document.getElementById('input-alamat').value);
     const noWa = sanitizeInput(document.getElementById('input-wa').value, 20);
 
-    if (!nama || !kelas) {
-        return showPopup("Data Belum Lengkap", "Harap isi <b>Nama</b> dan <b>Kelas/Asal</b> Anda sebelum mengambil tiket.");
+    if (!nama || !kelas || !alamat || !noWa) {
+        showPopup("Perhatian", "Silakan lengkapi <b>Nama</b>, <b>Kelas</b>, <b>Alamat</b>, dan <b>No. WhatsApp</b>.");
+        return;
     }
 
     const selectedBgs = backgrounds.filter(bg => bgQuantities[bg.id] > 0);
@@ -244,15 +260,36 @@ async function submitQueue() {
         return showPopup("Pilih Background", "Anda harus memilih minimal <b>satu background photobooth</b>!");
     }
 
+    if (!currentBoothId && !isEditMode) {
+        return showPopup('Booth Tidak Diketahui', 'Buka halaman ini melalui QR Code yang disediakan panitia (URL harus menyertakan ?booth=ID).');
+    }
+
+    const paymentMethod = document.querySelector('input[name="payment_method"]:checked').value;
+    let paymentChannel = null;
+    if (paymentMethod === 'online') {
+        paymentChannel = document.getElementById('payment-channel-select').value;
+    }
+
+    pendingQueueData = { nama, kelas, alamat, noWa, selectedBgs };
+
+    if (isEditMode) {
+        await executeSubmitQueue(null, null);
+    } else {
+        await executeSubmitQueue(paymentMethod, paymentChannel);
+    }
+}
+
+async function executeSubmitQueue(paymentMethod, paymentChannel) {
+    if (!pendingQueueData) return;
+    const { nama, kelas, alamat, noWa, selectedBgs } = pendingQueueData;
+
     document.getElementById('selection-section').classList.add('hidden');
     document.getElementById('ticket-section').classList.remove('hidden');
     document.getElementById('ticket-user-info').textContent = `${nama} - ${kelas} - ${alamat}`;
     document.getElementById('ticket-number').textContent = isEditMode ? originalQueueId : '...';
     document.getElementById('ticket-items').innerHTML = '<div class="text-center font-bold">Menyimpan ke server...</div>';
-
-    if (!currentBoothId && !isEditMode) {
-        return showPopup('Booth Tidak Diketahui', 'Buka halaman ini melalui QR Code yang disediakan panitia (URL harus menyertakan ?booth=ID).');
-    }
+    
+    document.getElementById('ticket-payment-status').textContent = 'Memproses...';
 
     try {
         // Siapkan data backgrounds
@@ -289,15 +326,51 @@ async function submitQueue() {
             rpcResult = res.data;
             rpcError = res.error;
         }
-
         if (rpcError) throw rpcError;
 
         myQueueId = rpcResult.nomor_antrian;
         const insertedData = rpcResult.rows;
+             // Update payment method & channel in database if not edit mode
+        if (!isEditMode && paymentMethod) {
+            await supabaseClient
+                .from('queues')
+                .update({ 
+                    payment_method: paymentMethod,
+                    payment_channel: paymentChannel
+                })
+                .eq('nomor_antrian', myQueueId);
+                
+            updateTicketPaymentUI(paymentMethod, paymentChannel);
+        } else if (isEditMode) {
+            // Fetch current payment method
+            const { data: qData } = await supabaseClient.from('queues').select('payment_method, payment_channel, payment_status').eq('nomor_antrian', myQueueId).limit(1).single();
+            if (qData) {
+                if (qData.payment_status === 'lunas') {
+                    document.getElementById('ticket-payment-status').innerHTML = '✅ LUNAS';
+                    document.getElementById('ticket-payment-status').className = 'mt-3 inline-block px-3 py-1 text-xs font-black uppercase border-2 border-black bg-neoGreen shadow-[2px_2px_0px_0px_#000]';
+                    document.getElementById('online-payment-actions').classList.add('hidden');
+                    document.getElementById('tunai-payment-actions').classList.add('hidden');
+                } else {
+                    updateTicketPaymentUI(qData.payment_method, qData.payment_channel);
+                }
+            }
+        }
 
         document.getElementById('ticket-number').textContent = myQueueId;
 
-        // Simpan ke localStorage dengan key per-booth
+        // Tampilkan item
+        let html = '';
+        insertedData.forEach(row => {
+            const bg = backgrounds.find(b => b.id === row.background_id);
+            if (bg) {
+                html += `<div class="border-b-2 border-black border-dashed pb-2 last:border-0 font-bold text-sm">
+                    ${bg.nama_background} <span class="float-right px-2 bg-neoYellow border border-black">${row.jumlah_foto}x</span>
+                </div>`;
+            }
+        });
+        document.getElementById('ticket-items').innerHTML = html;
+
+        // Simpan state
         const savedKey = 'myQueueId_booth_' + currentBoothId;
         localStorage.setItem(savedKey, myQueueId);
         localStorage.setItem('myPiguraQty', piguraQty);
@@ -328,6 +401,120 @@ async function submitQueue() {
         console.error(err);
         showPopup("Kesalahan Sistem", "Terjadi kesalahan: " + err.message);
         resetApp();
+    }
+}
+
+// ============================================
+// Payment Execution Functions
+// ============================================
+function updateTicketPaymentUI(method, channel) {
+    const statusEl = document.getElementById('ticket-payment-status');
+    const methodTextEl = document.getElementById('ticket-payment-method-text');
+    const onlineActions = document.getElementById('online-payment-actions');
+    const tunaiActions = document.getElementById('tunai-payment-actions');
+    
+    if (method === 'online') {
+        const channelName = channel ? channel.toUpperCase().replace('_VA', ' VA') : 'ONLINE';
+        methodTextEl.textContent = `ONLINE (${channelName})`;
+        statusEl.innerHTML = '⏳ MENUNGGU PEMBAYARAN';
+        statusEl.className = 'mt-3 inline-block px-3 py-1 text-xs font-black uppercase border-2 border-black bg-neoYellow shadow-[2px_2px_0px_0px_#000]';
+        onlineActions.classList.remove('hidden');
+        tunaiActions.classList.add('hidden');
+    } else {
+        methodTextEl.textContent = 'TUNAI';
+        statusEl.innerHTML = '💵 BAYAR DI KASIR SEKARANG';
+        statusEl.className = 'mt-3 inline-block px-3 py-1 text-xs font-black uppercase border-2 border-black bg-white shadow-[2px_2px_0px_0px_#000] text-black animate-pulse';
+        onlineActions.classList.add('hidden');
+        tunaiActions.classList.remove('hidden');
+    }
+}
+
+async function payNowOnline() {
+    if (!myQueueId) return;
+    
+    const btn = document.querySelector('#online-payment-actions button');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = 'MENGALIHKAN...';
+    btn.disabled = true;
+
+    try {
+        const { data: qData } = await supabaseClient.from('queues').select('nama_lengkap, no_wa, payment_channel').eq('nomor_antrian', myQueueId).limit(1).single();
+        
+        let totalHarga = 0;
+        let customerName = qData?.nama_lengkap || 'Customer';
+        let customerPhone = qData?.no_wa || '08000000000';
+        
+        if (pendingQueueData) {
+            const totalFoto = pendingQueueData.selectedBgs.reduce((sum, bg) => sum + bgQuantities[bg.id], 0);
+            totalHarga = (totalFoto * HARGA_PER_FOTO) + (piguraQty * HARGA_PIGURA);
+            customerName = pendingQueueData.nama;
+            customerPhone = pendingQueueData.noWa;
+        } else {
+            // Re-calculate from state if page reloaded
+            const totalFoto = Object.values(myTicketStatuses).reduce((sum, item) => sum + (item.qty || 0), 0);
+            const savedPigura = parseInt(localStorage.getItem('myPiguraQty') || '0');
+            totalHarga = (totalFoto * HARGA_PER_FOTO) + (savedPigura * HARGA_PIGURA);
+        }
+        
+        const { data: payData, error: payError } = await supabaseClient.functions.invoke('create-payment', {
+            body: {
+                nomor_antrian: myQueueId,
+                amount: totalHarga,
+                customer_name: customerName,
+                customer_phone: customerPhone,
+                channel_code: qData.payment_channel || 'qris',
+                return_url: window.location.origin + '/payment-return.html?order_id=' + myQueueId
+            }
+        });
+        
+        if (payError || (payData && payData.error)) {
+            console.error("Payment Gateway Error:", payError || payData.error);
+            showPopup('Gagal', 'Gagal membuat tagihan online. Silakan coba lagi atau bayar tunai.');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        } else if (payData && payData.data && payData.data.pay_url) {
+            window.open(payData.data.pay_url, '_blank');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    } catch (e) {
+        console.error(e);
+        showPopup('Error', 'Terjadi kesalahan sistem.');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+function openChangePaymentModal() {
+    document.getElementById('change-payment-modal').classList.remove('hidden');
+    setTimeout(() => {
+        document.getElementById('change-payment-modal-content').classList.remove('scale-95', 'opacity-0');
+    }, 10);
+}
+
+function closeChangePaymentModal() {
+    document.getElementById('change-payment-modal-content').classList.add('scale-95', 'opacity-0');
+    setTimeout(() => {
+        document.getElementById('change-payment-modal').classList.add('hidden');
+    }, 300);
+}
+
+async function confirmChangePayment(method, channel) {
+    if (!myQueueId) return;
+    closeChangePaymentModal();
+    
+    document.getElementById('ticket-payment-status').innerHTML = 'MEMPERBARUI...';
+    
+    try {
+        await supabaseClient.from('queues').update({
+            payment_method: method,
+            payment_channel: channel
+        }).eq('nomor_antrian', myQueueId);
+        
+        updateTicketPaymentUI(method, channel);
+    } catch (e) {
+        console.error(e);
+        showPopup('Gagal', 'Gagal mengubah metode pembayaran.');
     }
 }
 
@@ -685,6 +872,20 @@ async function restoreQueue(queueId) {
     document.getElementById('input-kelas').value = kelas;
     document.getElementById('input-alamat').value = alamat;
     document.getElementById('input-wa').value = noWa;
+
+    // Restore payment status
+    const paymentMethod = data[0].payment_method;
+    const paymentChannel = data[0].payment_channel;
+    const paymentStatus = data[0].payment_status;
+
+    if (paymentStatus === 'lunas') {
+        document.getElementById('ticket-payment-status').innerHTML = '✅ LUNAS';
+        document.getElementById('ticket-payment-status').className = 'mt-3 inline-block px-3 py-1 text-xs font-black uppercase border-2 border-black bg-neoGreen shadow-[2px_2px_0px_0px_#000]';
+        document.getElementById('online-payment-actions').classList.add('hidden');
+        document.getElementById('tunai-payment-actions').classList.add('hidden');
+    } else if (paymentMethod) {
+        updateTicketPaymentUI(paymentMethod, paymentChannel);
+    }
 
     await fetchWaitingQueues();
     renderTicketStatuses();

@@ -89,8 +89,7 @@
                         placeholder="Contoh: Bululawang, Malang">
                 </div>
                 <div>
-                    <label class="font-mono text-sm font-bold uppercase block mb-2 text-gray-700">No. WhatsApp <span
-                            class="text-xs bg-neoYellow border border-black px-1">Lebih baik diisi</span></label>
+                    <label class="font-mono text-sm font-bold uppercase block mb-2 text-gray-700">No. WhatsApp <span class="text-neoRed">*</span></label>
                     <input type="tel" id="input-wa"
                         class="w-full border-2 border-black p-4 text-lg font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] focus:translate-y-[2px]"
                         placeholder="Contoh: 081234567890">
@@ -113,6 +112,50 @@
 
             <div id="bg-list" class="space-y-4">
                 <!-- Rendered via JS -->
+            </div>
+
+            <div class="flex items-center gap-4 my-8">
+                <div class="h-1 flex-1 bg-black"></div>
+                <div class="font-mono text-xs font-bold uppercase bg-black text-white px-3 py-1 tracking-widest shadow-[2px_2px_0px_0px_#fde047]">
+                    METODE PEMBAYARAN</div>
+                <div class="h-1 flex-1 bg-black"></div>
+            </div>
+
+            <div class="space-y-3" id="payment-selection-container">
+                <label class="block cursor-pointer">
+                    <input type="radio" name="payment_method" value="tunai" class="peer sr-only" checked onchange="updatePaymentUI()">
+                    <div class="w-full flex items-center justify-between bg-white text-black p-4 border-4 border-black shadow-[4px_4px_0px_0px_#000] peer-checked:bg-neoGreen peer-checked:translate-y-1 peer-checked:shadow-none transition-all">
+                        <div class="flex flex-col text-left">
+                            <span class="font-black text-lg uppercase tracking-tight">💵 Bayar Tunai</span>
+                            <span class="font-mono text-xs font-bold text-gray-700">Bayar langsung di kasir / petugas</span>
+                        </div>
+                        <div class="w-6 h-6 rounded-full border-4 border-black peer-checked:bg-black"></div>
+                    </div>
+                </label>
+
+                <label class="block cursor-pointer">
+                    <input type="radio" name="payment_method" value="online" class="peer sr-only" onchange="updatePaymentUI()">
+                    <div class="w-full flex items-center justify-between bg-white text-black p-4 border-4 border-black shadow-[4px_4px_0px_0px_#000] peer-checked:bg-neoCyan peer-checked:translate-y-1 peer-checked:shadow-none transition-all">
+                        <div class="flex flex-col text-left">
+                            <span class="font-black text-lg uppercase tracking-tight">💳 Bayar Online</span>
+                            <span class="font-mono text-xs font-bold text-gray-700">QRIS, Virtual Account, E-Wallet</span>
+                        </div>
+                        <div class="w-6 h-6 rounded-full border-4 border-black peer-checked:bg-black"></div>
+                    </div>
+                </label>
+
+                <!-- Pilihan Channel Online (Hidden by default) -->
+                <div id="online-channels-container" class="hidden mt-4 pl-4 border-l-4 border-black space-y-2">
+                    <p class="font-mono text-xs font-bold uppercase tracking-widest text-gray-700 mb-2">Pilih Bank / Dompet Digital:</p>
+                    <select id="payment-channel-select" class="w-full border-4 border-black p-3 font-bold bg-white focus:outline-none focus:ring-4 focus:ring-neoCyan transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                        <option value="qris">📱 QRIS</option>
+                        <option value="bca_va">🏦 BCA Virtual Account</option>
+                        <option value="mandiri_va">🏦 Mandiri Virtual Account</option>
+                        <option value="bri_va">🏦 BRI Virtual Account</option>
+                        <option value="dana">💸 DANA</option>
+                        <option value="linkaja">💸 LinkAja</option>
+                    </select>
+                </div>
             </div>
 
             <div class="flex flex-col gap-2 mt-10">
@@ -176,10 +219,34 @@
             </div>
 
             <!-- TOTAL HARGA DI TIKET -->
-            <div class="mx-6 mb-4 p-4 bg-neoYellow border-4 border-black shadow-[4px_4px_0px_0px_#000] text-center">
+            <div class="mx-6 mb-4 p-4 bg-neoYellow border-4 border-black shadow-[4px_4px_0px_0px_#000] text-center" id="ticket-payment-box">
                 <div class="font-mono text-xs font-bold uppercase tracking-widest mb-1">Total Pembayaran</div>
                 <div id="ticket-total-price" class="text-3xl font-black tracking-tight">Rp 0</div>
-                <div id="ticket-total-qty" class="font-mono text-xs font-bold mt-1 text-gray-700">0 foto</div>
+                <div id="ticket-total-qty" class="font-mono text-xs font-bold mt-1 text-gray-700 mb-3">0 foto</div>
+                
+                <div class="border-t-2 border-black border-dashed pt-3 pb-1">
+                    <div class="font-mono text-[10px] font-bold uppercase text-gray-700 mb-1">Metode Pembayaran:</div>
+                    <div id="ticket-payment-method-text" class="font-black text-sm uppercase">TUNAI</div>
+                </div>
+                
+                <div id="ticket-payment-status" class="mt-2 inline-block px-3 py-1 text-xs font-black uppercase border-2 border-black bg-white shadow-[2px_2px_0px_0px_#000]">
+                    MENUNGGU...
+                </div>
+                
+                <div id="online-payment-actions" class="mt-4 flex flex-col gap-2 hidden">
+                    <button onclick="payNowOnline()" class="w-full bg-neoCyan text-black font-black uppercase py-2 border-2 border-black shadow-[2px_2px_0px_0px_#000] hover:-translate-y-0.5 hover:shadow-[4px_4px_0px_0px_#000] active:translate-y-0 active:shadow-none transition-all">
+                        🚀 BAYAR SEKARANG
+                    </button>
+                    <button onclick="openChangePaymentModal()" class="w-full bg-white text-black font-bold uppercase text-[10px] py-1 border-2 border-black hover:bg-gray-200 transition-colors">
+                        GANTI METODE
+                    </button>
+                </div>
+                
+                <div id="tunai-payment-actions" class="mt-4 flex flex-col gap-2">
+                    <button onclick="openChangePaymentModal()" class="w-full bg-white text-black font-bold uppercase text-[10px] py-1 border-2 border-black hover:bg-gray-200 transition-colors">
+                        GANTI KE BAYAR ONLINE
+                    </button>
+                </div>
             </div>
 
             <div class="h-1 w-full bg-black my-4"></div>
@@ -210,8 +277,43 @@
         </button>
     </div>
 
+    <!-- GANTI PEMBAYARAN MODAL -->
+    <div id="change-payment-modal"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[150] flex items-center justify-center p-4 hidden transition-opacity duration-300">
+        <div class="bg-white border-4 border-black shadow-[8px_8px_0px_0px_#000] p-6 max-w-sm w-full transform transition-all duration-300 scale-95 opacity-0 flex flex-col items-center"
+            id="change-payment-modal-content">
+            
+            <div class="bg-neoYellow w-full text-center border-b-4 border-black -mt-6 -mx-6 mb-6 p-4 flex justify-between items-center">
+                <h2 class="text-xl font-black uppercase tracking-tight">Ubah Pembayaran</h2>
+                <button onclick="closeChangePaymentModal()" class="text-2xl font-black hover:text-neoRed">✕</button>
+            </div>
+
+            <div class="w-full flex flex-col gap-4">
+                <button onclick="confirmChangePayment('tunai', null)"
+                    class="w-full flex items-center justify-between bg-neoGreen text-black p-4 border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000] active:translate-y-1 active:shadow-none transition-all">
+                    <span class="font-black text-base uppercase tracking-tight">💵 Ubah ke Tunai</span>
+                </button>
+                
+                <div class="h-0.5 w-full bg-black/20 my-2"></div>
+                
+                <p class="font-mono text-xs font-bold text-center">Atau pilih Online Channel:</p>
+
+                <div class="max-h-[30vh] overflow-y-auto pr-2 space-y-2 w-full">
+                    <button onclick="confirmChangePayment('online', 'qris')" class="w-full text-left bg-white text-black p-2 border-2 border-black hover:bg-neoCyan transition-colors font-bold uppercase text-sm">📱 QRIS</button>
+                    <button onclick="confirmChangePayment('online', 'bca_va')" class="w-full text-left bg-white text-black p-2 border-2 border-black hover:bg-neoCyan transition-colors font-bold uppercase text-sm">🏦 BCA VA</button>
+                    <button onclick="confirmChangePayment('online', 'mandiri_va')" class="w-full text-left bg-white text-black p-2 border-2 border-black hover:bg-neoCyan transition-colors font-bold uppercase text-sm">🏦 Mandiri VA</button>
+                    <button onclick="confirmChangePayment('online', 'bri_va')" class="w-full text-left bg-white text-black p-2 border-2 border-black hover:bg-neoCyan transition-colors font-bold uppercase text-sm">🏦 BRI VA</button>
+                    <button onclick="confirmChangePayment('online', 'dana')" class="w-full text-left bg-white text-black p-2 border-2 border-black hover:bg-neoCyan transition-colors font-bold uppercase text-sm">💸 DANA</button>
+                    <button onclick="confirmChangePayment('online', 'linkaja')" class="w-full text-left bg-white text-black p-2 border-2 border-black hover:bg-neoCyan transition-colors font-bold uppercase text-sm">💸 LinkAja</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
     <!-- Load page-specific logic -->
-    <script src="js/customer.js?v=4"></script>
+    <script src="js/customer.js?v=5"></script>
 </body>
 
 </html>

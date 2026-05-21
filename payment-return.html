@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status Pembayaran - AntriPhotobooth</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="shared/tailwind-config.js"></script>
+    <link rel="stylesheet" href="shared/styles.css">
+</head>
+
+<body class="flex flex-col p-4 md:p-8 max-w-md mx-auto relative min-h-screen bg-bgLight items-center justify-center">
+
+    <div class="neo-card bg-white p-8 text-center w-full shadow-[8px_8px_0px_0px_#000]">
+        <h1 class="text-3xl font-black uppercase tracking-tight mb-4" id="status-title">Mengecek Pembayaran...</h1>
+        
+        <div id="loading-spinner" class="animate-spin text-4xl mb-4">🔄</div>
+        
+        <p class="font-mono text-sm font-bold mb-6" id="status-message">Mohon tunggu, kami sedang memverifikasi pembayaran Anda.</p>
+
+        <a href="customer.html" id="btn-back" class="inline-block w-full bg-black text-white font-black uppercase py-4 border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all hidden">
+            KEMBALI KE TIKET
+        </a>
+    </div>
+
+    <script src="shared/config.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const params = new URLSearchParams(window.location.search);
+            const orderId = params.get('order_id');
+
+            if (!orderId) {
+                showError("Order ID tidak valid.");
+                return;
+            }
+
+            try {
+                // Call check-payment edge function
+                const { data, error } = await supabaseClient.functions.invoke('check-payment', {
+                    query: { order_id: orderId }
+                });
+
+                if (error || (data && data.error)) {
+                    throw new Error(error?.message || data?.error || 'Gagal mengecek status');
+                }
+
+                document.getElementById('loading-spinner').classList.add('hidden');
+                document.getElementById('btn-back').classList.remove('hidden');
+
+                if (data.data.status === 'paid') {
+                    document.getElementById('status-title').textContent = '✅ PEMBAYARAN BERHASIL';
+                    document.getElementById('status-title').className = 'text-3xl font-black uppercase tracking-tight mb-4 text-neoGreen';
+                    document.getElementById('status-message').textContent = 'Terima kasih! Tiket Anda telah lunas dan segera diproses.';
+                    
+                    // Supabase webhook should update the DB, but we can also update it here as fallback
+                    await supabaseClient.from('queues').update({ payment_status: 'lunas' }).eq('nomor_antrian', orderId);
+                } else if (data.data.status === 'pending') {
+                    document.getElementById('status-title').textContent = '⏳ MENUNGGU PEMBAYARAN';
+                    document.getElementById('status-title').className = 'text-3xl font-black uppercase tracking-tight mb-4 text-neoYellow';
+                    document.getElementById('status-message').textContent = 'Selesaikan pembayaran Anda menggunakan channel yang telah dipilih.';
+                } else {
+                    document.getElementById('status-title').textContent = '❌ PEMBAYARAN GAGAL';
+                    document.getElementById('status-title').className = 'text-3xl font-black uppercase tracking-tight mb-4 text-neoRed';
+                    document.getElementById('status-message').textContent = 'Pembayaran dibatalkan atau kadaluarsa. Silakan bayar tunai di kasir.';
+                    // Fallback to tunai if expired
+                    await supabaseClient.from('queues').update({ payment_method: 'tunai', payment_channel: null }).eq('nomor_antrian', orderId);
+                }
+            } catch (err) {
+                console.error(err);
+                showError(err.message);
+            }
+        });
+
+        function showError(msg) {
+            document.getElementById('loading-spinner').classList.add('hidden');
+            document.getElementById('btn-back').classList.remove('hidden');
+            document.getElementById('status-title').textContent = '⚠️ TERJADI KESALAHAN';
+            document.getElementById('status-title').className = 'text-3xl font-black uppercase tracking-tight mb-4 text-neoRed';
+            document.getElementById('status-message').textContent = msg;
+        }
+    </script>
+</body>
+</html>
