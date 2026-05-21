@@ -588,8 +588,11 @@ function renderCustomerTable() {
                 <div class="font-mono text-[10px] text-gray-500">${c.totalFoto} foto${c.totalPigura > 0 ? ` + ${c.totalPigura} pigura` : ''}</div>
             </td>
             <td class="p-3 text-center">
-                ${c.payment_method === 'online' ? '<div class="text-[10px] font-black uppercase mb-1 text-neoCyan bg-black px-1">💳 ONLINE</div>' : 
-                  c.payment_method === 'tunai' ? '<div class="text-[10px] font-black uppercase mb-1 text-black bg-neoYellow border border-black px-1">💵 TUNAI</div>' : ''}
+                <button onclick="togglePaymentMethod('${c.nomor_antrian}')" class="mb-1 transition-transform hover:scale-105 active:scale-95 cursor-pointer block w-full">
+                ${c.payment_method === 'online' ? '<div class="text-[10px] font-black uppercase text-neoCyan bg-black px-1 py-0.5 border-2 border-transparent hover:border-neoCyan">💳 ONLINE</div>' : 
+                  c.payment_method === 'tunai' ? '<div class="text-[10px] font-black uppercase text-black bg-neoYellow border-2 border-black px-1 py-0.5 hover:bg-black hover:text-neoYellow">💵 TUNAI</div>' : 
+                  '<div class="text-[10px] font-black uppercase text-black bg-gray-200 border-2 border-black px-1 py-0.5 hover:bg-black hover:text-white">➖ KOSONG</div>'}
+                </button>
                 <button onclick="togglePayment('${c.nomor_antrian}')"
                     class="payment-badge inline-block px-3 py-2 font-black text-xs uppercase border-3 border-black shadow-[2px_2px_0px_0px_#000] ${isLunas ? 'bg-neoGreen' : 'bg-neoRed'}">
                     ${isLunas ? '✅ LUNAS' : '❌ BELUM'}
@@ -633,6 +636,37 @@ async function togglePayment(nomorAntrian) {
     customer.payment_status = newStatus;
     allCustomerData.forEach(row => {
         if (row.nomor_antrian === nomorAntrian) row.payment_status = newStatus;
+    });
+
+    applyFilters();
+}
+
+// ============================================
+// Payment Method Toggle
+// ============================================
+async function togglePaymentMethod(nomorAntrian) {
+    const customer = groupedCustomers.find(c => c.nomor_antrian === nomorAntrian);
+    if (!customer) return;
+
+    let newMethod = 'tunai';
+    if (!customer.payment_method || customer.payment_method === 'tunai') {
+        newMethod = 'online';
+    }
+
+    const { error } = await supabaseClient
+        .from('queues')
+        .update({ payment_method: newMethod })
+        .eq('nomor_antrian', nomorAntrian);
+
+    if (error) {
+        showPopup('Error', 'Gagal mengubah metode pembayaran: ' + error.message, true);
+        return;
+    }
+
+    // Update local data
+    customer.payment_method = newMethod;
+    allCustomerData.forEach(row => {
+        if (row.nomor_antrian === nomorAntrian) row.payment_method = newMethod;
     });
 
     applyFilters();

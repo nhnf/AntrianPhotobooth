@@ -11,7 +11,7 @@
 async function checkAuthWithRole(allowedRoles = []) {
     const { data: { session }, error } = await supabaseClient.auth.getSession();
     if (error || !session) {
-        window.location.href = 'login.html';
+        window.location.href = 'index.html';
         return null;
     }
 
@@ -92,7 +92,7 @@ async function loginWithEmail(email, password) {
  */
 async function logout() {
     await supabaseClient.auth.signOut();
-    window.location.href = 'login.html';
+    window.location.href = 'index.html';
 }
 
 /**

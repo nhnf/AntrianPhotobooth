@@ -141,16 +141,20 @@ async function loadBackgrounds() {
         const colors = ['hover:bg-neoPink', 'hover:bg-neoYellow', 'hover:bg-neoCyan', 'hover:bg-neoGreen'];
         listEl.innerHTML = backgrounds.map((bg, idx) => {
             const color = colors[idx % colors.length];
+            const imgPath = `assets/bg${idx + 1}.jpeg`;
             return `
-            <div class="bg-white ${color} border-2 border-black p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all">
-                <div class="text-center md:text-left flex-1">
-                    <h3 class="text-xl font-black uppercase tracking-tight">${bg.nama_background}</h3>
-                    <p class="font-mono text-xs font-bold text-gray-600 mt-1">${formatCurrency(HARGA_PER_FOTO)} / foto</p>
+            <div class="bg-white ${color} border-2 border-black p-2 sm:p-3 flex flex-row items-center gap-2 sm:gap-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 transition-all">
+                <div class="w-14 h-14 sm:w-20 sm:h-20 shrink-0 border-2 border-black bg-gray-200 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity" onclick="openPreview('${imgPath}', '${bg.nama_background}')" title="Klik untuk perbesar">
+                    <img src="${imgPath}" alt="${bg.nama_background}" class="w-full h-full object-cover" onerror="this.parentElement.style.display='none'">
+                </div>
+                <div class="text-left flex-1 min-w-0">
+                    <h3 class="text-sm sm:text-lg font-black uppercase tracking-tight leading-tight">${bg.nama_background}</h3>
+                    <p class="font-mono text-[10px] sm:text-xs font-bold text-gray-800 mt-0.5 sm:mt-1 whitespace-nowrap">${formatCurrency(HARGA_PER_FOTO)}/ft</p>
                 </div>
                 <div class="flex items-center bg-white border-2 border-black rounded-full overflow-hidden shrink-0">
-                    <button onclick="changeQty(${bg.id}, -1)" class="w-12 h-10 bg-white hover:bg-gray-200 font-black text-xl flex items-center justify-center transition-colors border-r-2 border-black">-</button>
-                    <span id="qty-${bg.id}" class="font-mono font-black text-lg w-10 text-center flex items-center justify-center bg-white h-10">0</span>
-                    <button onclick="changeQty(${bg.id}, 1)" class="w-12 h-10 bg-white hover:bg-gray-200 font-black text-xl flex items-center justify-center transition-colors border-l-2 border-black">+</button>
+                    <button onclick="changeQty(${bg.id}, -1)" class="w-8 h-8 sm:w-10 sm:h-10 bg-white hover:bg-gray-200 font-black text-lg sm:text-xl flex items-center justify-center transition-colors border-r-2 border-black">-</button>
+                    <span id="qty-${bg.id}" class="font-mono font-black text-sm sm:text-lg w-6 sm:w-10 text-center flex items-center justify-center bg-white h-8 sm:h-10">0</span>
+                    <button onclick="changeQty(${bg.id}, 1)" class="w-8 h-8 sm:w-10 sm:h-10 bg-white hover:bg-gray-200 font-black text-lg sm:text-xl flex items-center justify-center transition-colors border-l-2 border-black">+</button>
                 </div>
             </div>
             `;
@@ -164,15 +168,15 @@ async function loadBackgrounds() {
                 <div class="h-1 flex-1 bg-black"></div>
             </div>
 
-            <div class="bg-white hover:bg-neoGreen border-2 border-black p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transition-all">
-                <div class="text-center md:text-left flex-1">
-                    <h3 class="text-xl font-black uppercase tracking-tight">Pigura</h3>
-                    <p class="font-mono text-xs font-bold text-gray-600 mt-1">${formatCurrency(HARGA_PIGURA)} / pcs</p>
+            <div class="bg-white hover:bg-neoGreen border-2 border-black p-3 sm:p-4 flex flex-row items-center gap-2 sm:gap-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 transition-all">
+                <div class="text-left flex-1 min-w-0">
+                    <h3 class="text-sm sm:text-xl font-black uppercase tracking-tight">Pigura</h3>
+                    <p class="font-mono text-[10px] sm:text-xs font-bold text-gray-600 mt-0.5 sm:mt-1 whitespace-nowrap">${formatCurrency(HARGA_PIGURA)} / pcs</p>
                 </div>
                 <div class="flex items-center bg-white border-2 border-black rounded-full overflow-hidden shrink-0">
-                    <button onclick="changePiguraQty(-1)" class="w-12 h-10 bg-white hover:bg-gray-200 font-black text-xl flex items-center justify-center transition-colors border-r-2 border-black">-</button>
-                    <span id="qty-pigura" class="font-mono font-black text-lg w-10 text-center flex items-center justify-center bg-white h-10">0</span>
-                    <button onclick="changePiguraQty(1)" class="w-12 h-10 bg-white hover:bg-gray-200 font-black text-xl flex items-center justify-center transition-colors border-l-2 border-black">+</button>
+                    <button onclick="changePiguraQty(-1)" class="w-8 h-8 sm:w-12 sm:h-10 bg-white hover:bg-gray-200 font-black text-lg sm:text-xl flex items-center justify-center transition-colors border-r-2 border-black">-</button>
+                    <span id="qty-pigura" class="font-mono font-black text-sm sm:text-lg w-6 sm:w-10 text-center flex items-center justify-center bg-white h-8 sm:h-10">0</span>
+                    <button onclick="changePiguraQty(1)" class="w-8 h-8 sm:w-12 sm:h-10 bg-white hover:bg-gray-200 font-black text-lg sm:text-xl flex items-center justify-center transition-colors border-l-2 border-black">+</button>
                 </div>
             </div>
 
@@ -224,6 +228,20 @@ function updateTotalPrice() {
             priceBox.classList.add('hidden');
         }
     }
+}
+
+// ============================================
+// Image Preview Modal
+// ============================================
+function openPreview(src, title) {
+    document.getElementById('preview-image-src').src = src;
+    document.getElementById('preview-image-title').textContent = title;
+    document.getElementById('image-preview-modal').classList.remove('hidden');
+}
+
+function closePreview() {
+    document.getElementById('image-preview-modal').classList.add('hidden');
+    document.getElementById('preview-image-src').src = "";
 }
 
 // ============================================
