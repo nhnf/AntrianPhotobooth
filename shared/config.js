@@ -108,6 +108,71 @@ function playNotificationSound() {
 }
 
 // ============================================
+// Voice Announcement (Text-to-Speech)
+// ============================================
+
+/**
+ * Ucapkan teks pengumuman via Web Speech API (TTS).
+ * Membutuhkan interaksi user sebelumnya agar browser mengizinkan audio.
+ * @param {string} text - Teks yang akan diucapkan
+ */
+function speakAnnouncement(text) {
+    if (!window.speechSynthesis) return;
+
+    // Hentikan ucapan yang sedang berjalan
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'id-ID';
+    utterance.rate = _voiceRate;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    const trySpeak = () => {
+        const voices = window.speechSynthesis.getVoices();
+
+        // Prioritas 1: Voice id-ID yang Online/Neural (kualitas terbaik)
+        // Chrome: "Google Bahasa Indonesia", Edge: "Microsoft Andika Online"
+        let chosen = voices.find(v =>
+            v.lang && v.lang.startsWith('id') && !v.localService
+        );
+
+        // Prioritas 2: Semua voice id-ID (termasuk offline)
+        if (!chosen) chosen = voices.find(v => v.lang && v.lang.startsWith('id'));
+
+        // Prioritas 3: Voice yang dipilih manual lewat UI
+        if (_selectedVoiceURI) {
+            const manual = voices.find(v => v.voiceURI === _selectedVoiceURI);
+            if (manual) chosen = manual;
+        }
+
+        if (chosen) utterance.voice = chosen;
+        window.speechSynthesis.speak(utterance);
+    };
+
+    if (window.speechSynthesis.getVoices().length === 0) {
+        window.speechSynthesis.onvoiceschanged = () => {
+            window.speechSynthesis.onvoiceschanged = null;
+            trySpeak();
+        };
+    } else {
+        trySpeak();
+    }
+}
+
+// State untuk konfigurasi voice (bisa diubah dari UI)
+let _voiceRate = 0.9;          // Rate optimal: cukup lambat tapi tidak patah-patah
+let _selectedVoiceURI = null;  // null = otomatis pilih terbaik
+
+/**
+ * Kembalikan daftar semua voice yang tersedia (untuk UI selector).
+ */
+function getAvailableVoices() {
+    return window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+}
+
+
+// ============================================
 // Utility functions
 // ============================================
 function formatTime(timestamp) {

@@ -7,6 +7,7 @@ let currentCalled = {};
 let nextInLine = {};
 let delayedQueues = [];
 let isAudioEnabled = false;
+let isVoiceEnabled = false;
 
 // Multi-Booth state
 let currentBoothId = null;
@@ -41,13 +42,122 @@ function updateClock() {
 
 async function startMonitor() {
     isAudioEnabled = true;
+    // isVoiceEnabled tidak diaktifkan otomatis — butuh klik tombol (browser policy)
     await loadData();
     subscribeToUpdates();
+}
+
+function toggleVoice() {
+    isVoiceEnabled = !isVoiceEnabled;
+    const btn = document.getElementById('voice-toggle-btn');
+    if (!btn) return;
+
+    if (isVoiceEnabled) {
+        btn.dataset.active = 'true';
+        btn.innerHTML = `<span class="text-lg">🔊</span><span class="leading-tight">Suara<br>Aktif</span>`;
+        btn.classList.remove('bg-neoYellow');
+        btn.classList.add('bg-neoGreen');
+        // Ucapkan konfirmasi untuk "unlock" AudioContext browser
+        speakAnnouncement('Sistem pengumuman suara aktif.');
+    } else {
+        btn.dataset.active = 'false';
+        btn.innerHTML = `<span class="text-lg">🔇</span><span class="leading-tight">Aktifkan<br>Suara</span>`;
+        btn.classList.remove('bg-neoGreen');
+        btn.classList.add('bg-neoYellow');
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
+    }
+}
+
+// ============================================
+// Voice Settings Modal
+// ============================================
+function openVoiceSettings() {
+    const modal = document.getElementById('voice-settings-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    populateVoiceList();
+}
+
+function closeVoiceSettings() {
+    const modal = document.getElementById('voice-settings-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+// Tutup modal jika klik di luar area panel
+document.addEventListener('click', (e) => {
+    const modal = document.getElementById('voice-settings-modal');
+    if (modal && !modal.classList.contains('hidden') && e.target === modal) {
+        closeVoiceSettings();
+    }
+});
+
+function populateVoiceList() {
+    const select = document.getElementById('voice-select');
+    if (!select || !window.speechSynthesis) return;
+
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) {
+        // Tunggu sampai voices siap lalu coba lagi
+        window.speechSynthesis.onvoiceschanged = () => {
+            window.speechSynthesis.onvoiceschanged = null;
+            populateVoiceList();
+        };
+        return;
+    }
+
+    // Simpan pilihan sebelumnya
+    const currentVal = select.value;
+
+    select.innerHTML = '<option value="">-- Otomatis (Terbaik) --</option>';
+
+    // Urutkan: id-ID online dulu, lalu id-ID offline, lalu sisanya
+    const sorted = [...voices].sort((a, b) => {
+        const aId = a.lang && a.lang.startsWith('id');
+        const bId = b.lang && b.lang.startsWith('id');
+        const aOnline = !a.localService;
+        const bOnline = !b.localService;
+        if (aId && !bId) return -1;
+        if (!aId && bId) return 1;
+        if (aOnline && !bOnline) return -1;
+        if (!aOnline && bOnline) return 1;
+        return a.name.localeCompare(b.name);
+    });
+
+    sorted.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.voiceURI;
+        const isId = v.lang && v.lang.startsWith('id');
+        const isOnline = !v.localService;
+        const tag = isOnline ? '[Online] ' : '[Offline] ';
+        const flag = isId ? '🇮🇩 ' : '';
+        opt.textContent = `${flag}${tag}${v.name} (${v.lang})`;
+        if (isId && isOnline) opt.style.fontWeight = 'bold';
+        if (v.voiceURI === _selectedVoiceURI) opt.selected = true;
+        select.appendChild(opt);
+    });
+
+    // Pulihkan pilihan jika masih ada
+    if (currentVal) select.value = currentVal;
+}
+
+function onVoiceChange(voiceURI) {
+    _selectedVoiceURI = voiceURI || null;
+}
+
+function onRateChange(val) {
+    _voiceRate = parseFloat(val);
+    const display = document.getElementById('rate-display');
+    if (display) display.textContent = parseFloat(val).toFixed(2) + '×';
+}
+
+function testVoice() {
+    speakAnnouncement('Nomor antrian B-007, atas nama Budi Santoso, harap segera menuju area photobooth.');
 }
 
 // ============================================
 // Data Loading
 // ============================================
+
 async function loadData() {
     try {
         const { data: bgs, error: bgError } = await supabaseClient.from('backgrounds').select('*').order('id');
@@ -278,6 +388,15 @@ function updateColumnUI(bgId, number, isJustCalled, record) {
 
     if (isJustCalled) {
         if (isAudioEnabled) playNotificationSound();
+
+        // Umumkan via TTS setelah 1 detik (setelah ting-tong selesai)
+        if (isVoiceEnabled && record) {
+            // Cari nama background dari array global
+            const bg = backgrounds.find(b => b.id === record.background_id);
+            const areaTeks = bg ? `, di area ${bg.nama_background}` : '';
+            const teks = `Nomor antrian ${record.nomor_antrian}, atas nama ${record.nama_lengkap}${areaTeks}, harap segera menuju area photobooth.`;
+            setTimeout(() => speakAnnouncement(teks), 1000);
+        }
 
         cardEl.classList.add('calling-highlight');
         msgEl.classList.remove('opacity-0', 'translate-y-4');

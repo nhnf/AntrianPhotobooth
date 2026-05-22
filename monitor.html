@@ -37,9 +37,29 @@
                 <p id="booth-name" class="font-mono text-[10px] md:text-sm font-bold text-white bg-black border-2 border-black px-1 inline-block uppercase mt-0.5 ml-1"></p>
             </div>
         </div>
-        <div id="clock"
-            class="font-mono text-xl md:text-3xl font-bold tracking-widest bg-black text-white px-3 py-1 border-2 border-black shadow-[2px_2px_0px_0px_var(--tw-colors-neoPink)]">
-            00:00</div>
+        <div class="flex items-center gap-2 md:gap-3">
+            <!-- Tombol Pengaturan Suara -->
+            <button id="voice-settings-btn"
+                onclick="openVoiceSettings()"
+                title="Pengaturan suara"
+                class="font-mono text-[10px] md:text-xs font-black uppercase border-4 border-black px-2 md:px-3 py-1 md:py-2 bg-white hover:bg-gray-100 active:translate-x-[2px] active:translate-y-[2px] transition-all shadow-[3px_3px_0px_0px_#000] active:shadow-none flex items-center gap-1 select-none cursor-pointer">
+                <span class="text-base md:text-lg">⚙️</span>
+                <span class="leading-tight hidden md:inline">Suara</span>
+            </button>
+            <!-- Tombol Aktifkan Suara -->
+            <button id="voice-toggle-btn"
+                onclick="toggleVoice()"
+                data-active="false"
+                title="Klik untuk mengaktifkan/menonaktifkan pengumuman suara"
+                class="font-mono text-[10px] md:text-xs font-black uppercase border-4 border-black px-2 md:px-3 py-1 md:py-2 bg-neoYellow hover:brightness-90 active:translate-x-[2px] active:translate-y-[2px] transition-all shadow-[3px_3px_0px_0px_#000] active:shadow-none flex items-center gap-1.5 select-none cursor-pointer">
+                <span class="text-base md:text-lg">🔇</span>
+                <span class="leading-tight hidden sm:inline">Aktifkan<br>Suara</span>
+            </button>
+            <!-- Jam -->
+            <div id="clock"
+                class="font-mono text-xl md:text-3xl font-bold tracking-widest bg-black text-white px-3 py-1 border-2 border-black shadow-[2px_2px_0px_0px_var(--tw-colors-neoPink)]">
+                00:00</div>
+        </div>
     </header>
 
     <!-- MAIN CONTENT -->
@@ -77,6 +97,57 @@
         Harap tetap memantau antrian Anda, baik di HP maupun di monitor, agar tidak terlewat. apabila terlewat harap
         menuju ke petugas.
     </footer>
+
+    <!-- MODAL: Pengaturan Suara -->
+    <div id="voice-settings-modal"
+        class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div class="bg-white border-4 border-black shadow-[8px_8px_0px_0px_#000] w-full max-w-md p-0 font-mono">
+            <!-- Header Modal -->
+            <div class="bg-black text-white font-black uppercase p-3 text-base flex justify-between items-center">
+                <span>⚙️ Pengaturan Suara</span>
+                <button onclick="closeVoiceSettings()" class="text-white text-xl leading-none hover:text-neoYellow">✕</button>
+            </div>
+            <div class="p-4 space-y-5">
+
+                <!-- Pilih Suara -->
+                <div>
+                    <label class="block font-black uppercase text-xs mb-1 tracking-widest">Pilih Suara</label>
+                    <select id="voice-select"
+                        onchange="onVoiceChange(this.value)"
+                        class="w-full border-4 border-black px-3 py-2 font-mono text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black">
+                        <option value="">-- Otomatis (Terbaik) --</option>
+                    </select>
+                    <p class="text-[10px] text-gray-500 mt-1 uppercase tracking-wide">
+                        ✨ Suara bertanda <strong>[Online]</strong> = kualitas terbaik (butuh internet)
+                    </p>
+                </div>
+
+                <!-- Kecepatan Bicara -->
+                <div>
+                    <label class="block font-black uppercase text-xs mb-1 tracking-widest">
+                        Kecepatan: <span id="rate-display">0.9×</span>
+                    </label>
+                    <input type="range" id="rate-slider"
+                        min="0.5" max="1.3" step="0.05" value="0.9"
+                        oninput="onRateChange(this.value)"
+                        class="w-full accent-black h-2 cursor-pointer">
+                    <div class="flex justify-between text-[10px] text-gray-400 uppercase mt-0.5">
+                        <span>Lambat</span><span>Normal</span><span>Cepat</span>
+                    </div>
+                </div>
+
+                <!-- Test Suara -->
+                <button onclick="testVoice()"
+                    class="w-full border-4 border-black px-4 py-2 font-black uppercase text-sm bg-neoYellow hover:brightness-90 shadow-[4px_4px_0px_0px_#000] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all">
+                    🔊 Test Suara Sekarang
+                </button>
+
+                <p class="text-[10px] text-gray-400 uppercase tracking-wide text-center">
+                    Jika tidak ada suara Indonesia, install <strong>Microsoft Andika</strong> di pengaturan Windows → Waktu &amp; Bahasa → Ucapan
+                </p>
+            </div>
+        </div>
+    </div>
 
     <!-- Load page-specific logic -->
     <script src="js/monitor.js"></script>
