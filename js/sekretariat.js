@@ -200,8 +200,12 @@ function renderCalledPanel() {
             .filter(q => q.status === STATUS.MENUNGGU)
             .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); // Ascending (oldest first)
 
-        // Siapa yang berikutnya (sesuai dengan urutan dashboard monitor)
-        const nextInQueue = waitingList[0];
+        // Ambil semua nomor yang sedang dipanggil di booth ini
+        const calledNomors = allCustomerData.filter(q => q.status === STATUS.DIPANGGIL && (currentBoothFilter === 'all' || q.booth_id === parseInt(currentBoothFilter))).map(q => q.nomor_antrian);
+
+        // Siapa yang berikutnya (yang sedang tidak dipanggil di bg lain)
+        const nextInQueue = waitingList.find(q => !calledNomors.includes(q.nomor_antrian));
+        const isNextBusy = waitingList.length > 0 && !nextInQueue;
 
         const headerColor = bgColors[index % bgColors.length];
 
@@ -233,7 +237,7 @@ function renderCalledPanel() {
             <div class="border-t-4 border-black bg-neoYellow px-3 py-1.5 font-mono text-[10px] font-bold uppercase truncate">
                 ${nextInQueue
                     ? `Next: ${nextInQueue.nomor_antrian} (${(nextInQueue.nama_lengkap || '-').substring(0, 14)}${(nextInQueue.nama_lengkap || '').length > 14 ? '...' : ''})`
-                    : 'Next: —'}
+                    : isNextBusy ? '<span class="text-neoRed font-black tracking-wider">SIBUK DI BG LAIN</span>' : 'Next: —'}
             </div>
 
             <!-- Action Buttons -->
@@ -360,11 +364,17 @@ async function callNextSekretariat(bgId) {
     // Pastikan booth sudah difilter jika diperlukan
     const bgQueues = allCustomerData.filter(q => q.background_id === bgId && (currentBoothFilter === 'all' || q.booth_id === parseInt(currentBoothFilter)));
     const currentCalled = bgQueues.find(q => q.status === STATUS.DIPANGGIL);
+    
+    // Ambil semua nomor yang sedang dipanggil di booth ini
+    const calledNomors = allCustomerData.filter(q => q.status === STATUS.DIPANGGIL && (currentBoothFilter === 'all' || q.booth_id === parseInt(currentBoothFilter))).map(q => q.nomor_antrian);
+
     // Cari yang masih menunggu sesuai dengan urutan dashboard monitor
     const waitingList = bgQueues
         .filter(q => q.status === STATUS.MENUNGGU)
         .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); // Ascending (oldest first)
-    const nextWaiting = waitingList[0];
+        
+    // Pilih antrian pertama yang tidak sedang sibuk di background lain
+    const nextWaiting = waitingList.find(q => !calledNomors.includes(q.nomor_antrian));
 
     if (!nextWaiting) {
         const anyWaiting = bgQueues.find(q => q.status === STATUS.MENUNGGU);

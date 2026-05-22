@@ -393,8 +393,8 @@ function updateColumnUI(bgId, number, isJustCalled, record) {
         if (isVoiceEnabled && record) {
             // Cari nama background dari array global
             const bg = backgrounds.find(b => b.id === record.background_id);
-            const areaTeks = bg ? `, di area ${bg.nama_background}` : '';
-            const teks = `Nomor antrian ${record.nomor_antrian}, atas nama ${record.nama_lengkap}${areaTeks}, harap segera menuju area photobooth.`;
+            const namaBg = bg ? bg.nama_background : '';
+            const teks = `Nomor antrian ${record.nomor_antrian}, atas nama ${record.nama_lengkap}, harap segera menuju ${namaBg}.`;
             setTimeout(() => speakAnnouncement(teks), 1000);
         }
 
