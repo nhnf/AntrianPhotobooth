@@ -392,6 +392,7 @@ async function executeSubmitQueue(paymentMethod, paymentChannel) {
         const savedKey = 'myQueueId_booth_' + currentBoothId;
         localStorage.setItem(savedKey, myQueueId);
         localStorage.setItem('myPiguraQty', piguraQty);
+        saveToHistory(myQueueId);
         
         isEditMode = false;
         originalQueueId = null;
@@ -763,7 +764,7 @@ async function showNotification(title, body) {
 
     // Sound
     try {
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        const audio = new Audio('assets/audio.mp3');
         audio.volume = 0.5;
         audio.play();
     } catch (e) { }
@@ -866,6 +867,7 @@ async function restoreQueue(queueId) {
     // Simpan per booth
     const savedKey = 'myQueueId_booth_' + (currentBoothId || 'default');
     localStorage.setItem(savedKey, myQueueId);
+    saveToHistory(myQueueId);
 
     myTicketStatuses = {};
     data.forEach(row => {
@@ -1007,4 +1009,35 @@ function closePopup() {
     setTimeout(() => {
         popup.classList.add('hidden');
     }, 300);
+}
+
+// ============================================
+// Riwayat Antrian
+// ============================================
+function saveToHistory(queueId) {
+    let history = JSON.parse(localStorage.getItem('myQueueHistory') || '[]');
+    if (!history.includes(queueId)) {
+        history.push(queueId);
+        localStorage.setItem('myQueueHistory', JSON.stringify(history));
+    }
+}
+
+function lihatRiwayat() {
+    let history = JSON.parse(localStorage.getItem('myQueueHistory') || '[]');
+    if (history.length === 0) {
+        showPopup('Riwayat Kosong', 'Anda belum memiliki riwayat tiket di perangkat ini.');
+        return;
+    }
+
+    let html = "<p class='mb-4'>Riwayat tiket Anda sebelumnya:</p><div class='space-y-3 mt-3 max-h-60 overflow-y-auto pr-2'>";
+    history.slice().reverse().forEach(nomor => {
+        html += `
+            <div class="bg-bgLight border-2 border-black p-3 shadow-[2px_2px_0px_0px_#000] flex justify-between items-center">
+                <span class="font-black bg-white px-2 py-1 border-2 border-black text-lg">${nomor}</span>
+                <button onclick="restoreQueue('${nomor}'); closePopup();" class="bg-neoCyan text-black border-2 border-black font-bold px-3 py-1 text-xs uppercase hover:bg-black hover:text-white transition-colors">Lihat Tiket</button>
+            </div>
+        `;
+    });
+    html += "</div>";
+    showPopup('Riwayat Tiket', html);
 }

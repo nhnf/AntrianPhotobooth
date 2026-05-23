@@ -134,8 +134,11 @@ function renderColumns() {
                     ${currentCalled ? currentCalled.nomor_antrian : '--'}
                 </div>
                 ${currentCalled ? `
-                    <div class="font-bold text-lg uppercase bg-black text-white py-1 mb-1">${currentCalled.nama_lengkap}</div>
-                    <div class="font-mono font-bold border-2 border-black inline-block px-2">KLS: ${currentCalled.kelas} | FOTO: ${currentCalled.jumlah_foto}x</div>
+                    <div class="font-bold text-lg uppercase bg-black text-white py-1 mb-2">${currentCalled.nama_lengkap}</div>
+                    <div class="flex justify-center items-center gap-2">
+                        <div class="font-mono font-bold border-2 border-black bg-white px-2 py-1 uppercase">KLS: ${currentCalled.kelas}</div>
+                        <div class="font-mono font-black border-2 border-black bg-neoYellow text-black px-3 py-1 text-lg shadow-[2px_2px_0px_0px_#000] uppercase">FOTO: ${currentCalled.jumlah_foto}x</div>
+                    </div>
                 ` : ''}
             </div>
 
@@ -178,7 +181,7 @@ function renderColumns() {
                         <div class="flex flex-col p-3 border-2 border-black shadow-[2px_2px_0px_0px_#000] relative bg-white">
                             <div class="flex justify-between items-center border-b-2 border-black pb-1 mb-1">
                                 <span class="font-black text-xl">${q.nomor_antrian}</span>
-                                <span class="font-mono font-bold bg-black text-white px-2 py-0.5">${q.jumlah_foto}x</span>
+                                <span class="font-mono font-black bg-neoYellow text-black border-2 border-black px-2 py-0.5 text-sm shadow-[1px_1px_0px_0px_#000]">${q.jumlah_foto}x Foto</span>
                             </div>
                             <div class="font-bold text-sm uppercase truncate">${q.nama_lengkap || '-'}</div>
                             <div class="font-mono text-xs uppercase text-gray-600">${q.kelas || '-'}</div>
@@ -212,33 +215,43 @@ async function callNext(bgId) {
             : 'Tidak ada antrian yang menunggu.');
         return;
     }
-    try {
-        if (currentCalled) await supabaseClient.from('queues').update({ status: STATUS.SELESAI }).eq('id', currentCalled.id);
-        await supabaseClient.from('queues').update({ status: STATUS.DIPANGGIL }).eq('id', nextWaiting.id);
-    } catch (e) { showPopup('Error', 'Gagal memanggil antrian', true); }
+
+    showConfirm('Panggil Antrian', `Panggil antrian <b>${nextWaiting.nomor_antrian}</b>?${currentCalled ? '<br><br><i>Antrian saat ini akan ditandai selesai.</i>' : ''}`, 'PANGGIL', async () => {
+        try {
+            if (currentCalled) await supabaseClient.from('queues').update({ status: STATUS.SELESAI }).eq('id', currentCalled.id);
+            await supabaseClient.from('queues').update({ status: STATUS.DIPANGGIL }).eq('id', nextWaiting.id);
+        } catch (e) { showPopup('Error', 'Gagal memanggil antrian', true); }
+    });
 }
 
 async function returnToQueue(nomor_antrian) {
-    const { error } = await supabaseClient.from('queues').update({ status: STATUS.MENUNGGU })
-        .eq('nomor_antrian', nomor_antrian).eq('status', STATUS.DITUNDA);
-    if (error) showPopup('Error', 'Gagal mengembalikan antrian: ' + error.message, true);
+    showConfirm('Kembalikan Antrian', `Kembalikan antrian <b>${nomor_antrian}</b> ke daftar tunggu?`, 'KEMBALIKAN', async () => {
+        const { error } = await supabaseClient.from('queues').update({ status: STATUS.MENUNGGU })
+            .eq('nomor_antrian', nomor_antrian).eq('status', STATUS.DITUNDA);
+        if (error) showPopup('Error', 'Gagal mengembalikan antrian: ' + error.message, true);
+    });
 }
 
 async function markAsDelayed(bgId) {
     const currentCalled = allQueues.find(q => q.background_id === bgId && q.status === STATUS.DIPANGGIL);
     if (currentCalled) {
-        const { error } = await supabaseClient.from('queues').update({ status: STATUS.DITUNDA })
-            .eq('nomor_antrian', currentCalled.nomor_antrian)
-            .in('status', [STATUS.MENUNGGU, STATUS.DIPANGGIL]);
-        if (error) showPopup('Error', 'Gagal menunda: ' + error.message, true);
+        showConfirm('Tunda Antrian', `Tunda antrian <b>${currentCalled.nomor_antrian}</b>?`, 'TUNDA', async () => {
+            const { error } = await supabaseClient.from('queues').update({ status: STATUS.DITUNDA })
+                .eq('nomor_antrian', currentCalled.nomor_antrian)
+                .in('status', [STATUS.MENUNGGU, STATUS.DIPANGGIL]);
+            if (error) showPopup('Error', 'Gagal menunda: ' + error.message, true);
+        });
     }
 }
 
 async function markCurrentAs(status, bgId) {
     const currentCalled = allQueues.find(q => q.background_id === bgId && q.status === STATUS.DIPANGGIL);
     if (currentCalled) {
-        const { error } = await supabaseClient.from('queues').update({ status }).eq('id', currentCalled.id);
-        if (error) showPopup('Error', 'Gagal update status: ' + error.message, true);
+        const actionText = status === STATUS.SELESAI ? 'SELESAI' : 'BATAL';
+        showConfirm(`Tandai ${actionText}`, `Tandai antrian <b>${currentCalled.nomor_antrian}</b> sebagai ${actionText}?`, actionText, async () => {
+            const { error } = await supabaseClient.from('queues').update({ status }).eq('id', currentCalled.id);
+            if (error) showPopup('Error', 'Gagal update status: ' + error.message, true);
+        });
     }
 }
 

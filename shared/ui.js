@@ -170,3 +170,35 @@ function getPopupModalHTML() {
         </div>
     </div>`;
 }
+
+// ============================================
+// Offline Indicator
+// ============================================
+function setupOfflineIndicator() {
+    const banner = document.createElement('div');
+    banner.id = 'offline-banner';
+    banner.className = 'fixed top-0 left-0 w-full bg-neoRed text-white font-black uppercase text-center py-2 border-b-4 border-black shadow-[0_4px_0px_0px_#000] z-[9999] transform transition-transform duration-300 -translate-y-full';
+    banner.innerHTML = '⚠️ TIDAK ADA KONEKSI INTERNET ⚠️';
+    document.body.appendChild(banner);
+
+    const updateOnlineStatus = () => {
+        if (navigator.onLine) {
+            banner.classList.add('-translate-y-full');
+        } else {
+            banner.classList.remove('-translate-y-full');
+        }
+    };
+
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    
+    // Initial check
+    setTimeout(updateOnlineStatus, 1000);
+}
+
+// Auto-init offline indicator
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupOfflineIndicator);
+} else {
+    setupOfflineIndicator();
+}

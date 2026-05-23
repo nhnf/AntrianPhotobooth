@@ -127,3 +127,73 @@ body {
     background: #000;
     border-radius: 0;
 }
+
+/* --- Skeleton Loading --- */
+@keyframes skeleton-loading {
+    0% { background-color: #e2e8f0; }
+    50% { background-color: #cbd5e1; }
+    100% { background-color: #e2e8f0; }
+}
+
+.skeleton {
+    animation: skeleton-loading 1s infinite alternate;
+    border: 2px solid #000;
+}
+
+/* --- Dark Mode Overrides for Monitor --- */
+body.dark {
+    background-color: #121212;
+    color: #e0e0e0;
+    background-image: radial-gradient(#333 2px, transparent 2px);
+}
+
+body.dark .bg-white {
+    background-color: #1e1e1e !important;
+}
+
+body.dark .text-black {
+    color: #f3f4f6 !important;
+}
+
+body.dark .border-black {
+    border-color: #555 !important;
+}
+
+body.dark .neo-card-monitor {
+    background-color: #1e1e1e;
+    box-shadow: 8px 8px 0px 0px #000;
+}
+
+body.dark header {
+    background-color: #1a1a1a !important;
+    border-color: #000 !important;
+}
+
+body.dark .bg-bgLight {
+    background-color: #2a2a2a !important;
+}
+
+body.dark .bg-neoYellow {
+    background-color: #b45309 !important; /* darker yellow/orange */
+    color: #fff !important;
+}
+
+body.dark .bg-neoPink {
+    background-color: #9d174d !important;
+    color: #fff !important;
+}
+
+body.dark .calling-highlight {
+    background-color: #b45309 !important;
+}
+
+body.dark .skeleton {
+    animation: skeleton-loading-dark 1s infinite alternate;
+    border-color: #555;
+}
+
+@keyframes skeleton-loading-dark {
+    0% { background-color: #333; }
+    50% { background-color: #444; }
+    100% { background-color: #333; }
+}

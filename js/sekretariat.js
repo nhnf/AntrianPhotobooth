@@ -57,6 +57,25 @@ async function loadBackgrounds() {
 }
 
 async function fetchAllCustomers() {
+    const tbody = document.getElementById('table-body');
+    if (tbody && allCustomerData.length === 0) {
+        tbody.innerHTML = Array(5).fill().map(() => `
+            <tr class="border-b-2 border-black/20 bg-white">
+                <td class="p-3"><div class="skeleton h-4 w-6"></div></td>
+                <td class="p-3"><div class="skeleton h-6 w-16 mb-1"></div><div class="skeleton h-3 w-20"></div></td>
+                <td class="p-3"><div class="skeleton h-4 w-12"></div></td>
+                <td class="p-3"><div class="skeleton h-5 w-32 mb-1"></div></td>
+                <td class="p-3"><div class="skeleton h-4 w-8"></div></td>
+                <td class="p-3"><div class="skeleton h-4 w-24"></div></td>
+                <td class="p-3"><div class="skeleton h-4 w-32 mb-1"></div><div class="skeleton h-4 w-20"></div></td>
+                <td class="p-3"><div class="skeleton h-5 w-24 mb-1"></div><div class="skeleton h-3 w-16"></div></td>
+                <td class="p-3"><div class="skeleton h-6 w-20"></div></td>
+                <td class="p-3"><div class="skeleton h-6 w-16"></div></td>
+                <td class="p-3"><div class="skeleton h-8 w-8"></div></td>
+            </tr>
+        `).join('');
+    }
+
     let query = supabaseClient
         .from('queues')
         .select('*, backgrounds(nama_background)')
@@ -407,7 +426,7 @@ function renderStatsCards() {
     const total = filteredCustomers.length;
     const lunas = filteredCustomers.filter(c => c.payment_status === 'lunas').length;
     const belum = filteredCustomers.filter(c => c.payment_status === 'belum_lunas').length;
-    const totalPendapatan = filteredCustomers.reduce((sum, c) => sum + c.totalHarga, 0);
+    const totalPendapatan = filteredCustomers.filter(c => c.payment_status === 'lunas').reduce((sum, c) => sum + c.totalHarga, 0);
     const totalFoto = filteredCustomers.reduce((sum, c) => sum + c.totalFoto, 0);
 
     const bgStats = {};
@@ -631,24 +650,27 @@ async function togglePayment(nomorAntrian) {
     if (!customer) return;
 
     const newStatus = customer.payment_status === 'lunas' ? 'belum_lunas' : 'lunas';
+    const statusText = newStatus === 'lunas' ? 'LUNAS' : 'BELUM LUNAS';
 
-    const { error } = await supabaseClient
-        .from('queues')
-        .update({ payment_status: newStatus })
-        .eq('nomor_antrian', nomorAntrian);
+    showConfirm('Ubah Status Pembayaran', `Ubah status pembayaran <b>${nomorAntrian}</b> menjadi <b>${statusText}</b>?`, 'UBAH', async () => {
+        const { error } = await supabaseClient
+            .from('queues')
+            .update({ payment_status: newStatus })
+            .eq('nomor_antrian', nomorAntrian);
 
-    if (error) {
-        showPopup('Error', 'Gagal mengubah status pembayaran: ' + error.message, true);
-        return;
-    }
+        if (error) {
+            showPopup('Error', 'Gagal mengubah status pembayaran: ' + error.message, true);
+            return;
+        }
 
-    // Update local data
-    customer.payment_status = newStatus;
-    allCustomerData.forEach(row => {
-        if (row.nomor_antrian === nomorAntrian) row.payment_status = newStatus;
+        // Update local data
+        customer.payment_status = newStatus;
+        allCustomerData.forEach(row => {
+            if (row.nomor_antrian === nomorAntrian) row.payment_status = newStatus;
+        });
+
+        applyFilters();
     });
-
-    applyFilters();
 }
 
 // ============================================
@@ -663,20 +685,24 @@ async function togglePaymentMethod(nomorAntrian) {
         newMethod = 'online';
     }
 
-    const { error } = await supabaseClient
-        .from('queues')
-        .update({ payment_method: newMethod })
-        .eq('nomor_antrian', nomorAntrian);
+    showConfirm('Ubah Metode Pembayaran', `Ubah metode pembayaran <b>${nomorAntrian}</b> menjadi <b>${newMethod.toUpperCase()}</b>?`, 'UBAH', async () => {
+        const { error } = await supabaseClient
+            .from('queues')
+            .update({ payment_method: newMethod })
+            .eq('nomor_antrian', nomorAntrian);
 
-    if (error) {
-        showPopup('Error', 'Gagal mengubah metode pembayaran: ' + error.message, true);
-        return;
-    }
+        if (error) {
+            showPopup('Error', 'Gagal mengubah metode pembayaran: ' + error.message, true);
+            return;
+        }
 
-    // Update local data
-    customer.payment_method = newMethod;
-    allCustomerData.forEach(row => {
-        if (row.nomor_antrian === nomorAntrian) row.payment_method = newMethod;
+        // Update local data
+        customer.payment_method = newMethod;
+        allCustomerData.forEach(row => {
+            if (row.nomor_antrian === nomorAntrian) row.payment_method = newMethod;
+        });
+
+        applyFilters();
     });
 
     applyFilters();

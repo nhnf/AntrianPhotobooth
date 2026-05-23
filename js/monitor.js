@@ -17,6 +17,11 @@ let currentBoothInfo = null;
 // Initialization
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
+    // Load Dark Mode Preference
+    if (localStorage.getItem('monitorDarkMode') === 'true') {
+        document.body.classList.add('dark');
+    }
+
     updateClock();
     setInterval(updateClock, 1000);
 
@@ -159,6 +164,17 @@ function testVoice() {
 // ============================================
 
 async function loadData() {
+    const container = document.getElementById('monitor-columns');
+    if (container && (!backgrounds || backgrounds.length === 0)) {
+        container.innerHTML = Array(4).fill().map(() => `
+            <div class="neo-card-monitor border-4 border-black flex flex-col relative h-[50vh] md:h-[60vh] overflow-hidden justify-center items-center p-4">
+                <div class="skeleton w-3/4 h-12 mb-4"></div>
+                <div class="skeleton w-1/2 h-24 mb-4"></div>
+                <div class="skeleton w-full h-8 absolute bottom-0 left-0"></div>
+            </div>
+        `).join('');
+    }
+
     try {
         const { data: bgs, error: bgError } = await supabaseClient.from('backgrounds').select('*').order('id');
         if (bgError) return console.error(bgError);
@@ -307,14 +323,7 @@ function subscribeToUpdates() {
 // Dynamic UI Updates
 // ============================================
 async function fetchNextInLine(bgId) {
-    let query = supabaseClient
-        .from('queues')
-        .select('*')
-        .eq('background_id', bgId)
-        .eq('status', STATUS.MENUNGGU)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
+
 
     // Filter per booth (tidak bisa chain setelah maybeSingle, build dulu)
     let q = supabaseClient
@@ -406,4 +415,13 @@ function updateColumnUI(bgId, number, isJustCalled, record) {
             msgEl.classList.add('opacity-0', 'translate-y-4');
         }, 5000);
     }
+}
+
+// ============================================
+// Dark Mode Toggle
+// ============================================
+function toggleDarkMode() {
+    document.body.classList.toggle('dark');
+    const isDark = document.body.classList.contains('dark');
+    localStorage.setItem('monitorDarkMode', isDark);
 }

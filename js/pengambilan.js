@@ -78,6 +78,18 @@ function switchBooth(boothId) {
 }
 
 async function fetchFinishedCustomers() {
+    const container = document.getElementById('customer-cards');
+    if (container && allCustomerData.length === 0) {
+        container.innerHTML = Array(6).fill().map(() => `
+            <div class="neo-card p-4 border-4 border-black bg-white shadow-[8px_8px_0px_0px_#000]">
+                <div class="skeleton w-1/3 h-6 mb-2"></div>
+                <div class="skeleton w-1/2 h-8 mb-4"></div>
+                <div class="skeleton w-full h-16 mb-4"></div>
+                <div class="skeleton w-full h-10"></div>
+            </div>
+        `).join('');
+    }
+
     // We fetch all queues that are selesai or batal. But to group them, it's easier to fetch all queues
     // and then filter the groups.
     const { data, error } = await supabaseClient
@@ -109,11 +121,15 @@ function processCustomerData() {
                 no_wa: row.no_wa || '',
                 notes: row.notes || '',
                 payment_status: row.payment_status || 'belum_lunas',
-                picked_up: row.picked_up || false,
+                picked_up: false,
                 items: [],
-                totalPigura: row.pigura || 0
+                totalPigura: 0
             };
         }
+        
+        const g = groups[row.nomor_antrian];
+        g.totalPigura += (row.pigura || 0);
+        if (row.picked_up) g.picked_up = true;
         
         const bg = backgrounds.find(b => b.id === row.background_id);
         const bgName = bg ? bg.nama_background : 'Background ' + row.background_id;

@@ -38,6 +38,14 @@
             </div>
         </div>
         <div class="flex items-center gap-2 md:gap-3">
+            <!-- Tombol Dark Mode -->
+            <button id="dark-mode-btn"
+                onclick="toggleDarkMode()"
+                title="Ganti Tema"
+                class="font-mono text-[10px] md:text-xs font-black uppercase border-4 border-black px-2 md:px-3 py-1 md:py-2 bg-white hover:bg-gray-100 active:translate-x-[2px] active:translate-y-[2px] transition-all shadow-[3px_3px_0px_0px_#000] active:shadow-none flex items-center gap-1 select-none cursor-pointer">
+                <span class="text-base md:text-lg">🌙</span>
+                <span class="leading-tight hidden md:inline">Tema</span>
+            </button>
             <!-- Tombol Pengaturan Suara -->
             <button id="voice-settings-btn"
                 onclick="openVoiceSettings()"
