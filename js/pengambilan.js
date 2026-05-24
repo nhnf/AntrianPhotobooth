@@ -308,10 +308,17 @@ function renderCustomerTable() {
                 <div class="text-xs font-bold space-y-0.5">${purchaseLines.map(l => `<div>${l}</div>`).join('')}</div>
             </td>
             <td class="p-3 text-center">
-                <button onclick="togglePickup('${c.nomor_antrian}', ${c.picked_up})"
-                    class="btn-pickup inline-block px-3 py-2 font-black text-xs uppercase border-3 border-black shadow-[2px_2px_0px_0px_#000] ${c.picked_up ? 'bg-white' : 'bg-neoGreen'} w-full">
-                    ${c.picked_up ? 'Batalkan' : '✓ Ambil'}
-                </button>
+                ${c.picked_up && currentUserRole !== 'admin' ? 
+                    // Already picked up and user is not admin - show disabled state
+                    `<div class="inline-block px-3 py-2 font-black text-xs uppercase border-3 border-black bg-gray-200 text-gray-500 w-full">
+                        ✓ Sudah Diambil
+                    </div>` :
+                    // Show button (either "Ambil" or "Batalkan" for admin)
+                    `<button onclick="togglePickup('${c.nomor_antrian}', ${c.picked_up})"
+                        class="btn-pickup inline-block px-3 py-2 font-black text-xs uppercase border-3 border-black shadow-[2px_2px_0px_0px_#000] ${c.picked_up ? 'bg-white' : 'bg-neoGreen'} w-full">
+                        ${c.picked_up ? 'Batalkan' : '✓ Ambil'}
+                    </button>`
+                }
             </td>
         </tr>`;
     }).join('');
@@ -322,7 +329,37 @@ function renderCustomerTable() {
 // ============================================
 async function togglePickup(nomorAntrian, isPickedUp) {
     const newStatus = !isPickedUp;
+    
+    // If trying to mark as picked up (newStatus = true), show confirmation
+    if (newStatus) {
+        showConfirm(
+            'Konfirmasi Pengambilan',
+            `Tandai tiket <b>${nomorAntrian}</b> sebagai <b>SUDAH DIAMBIL</b>?<br><br>Setelah ditandai, hanya sekretariat yang bisa membatalkan.`,
+            'YA, SUDAH DIAMBIL',
+            async () => {
+                await executePickupUpdate(nomorAntrian, newStatus);
+            }
+        );
+    } else {
+        // Trying to cancel pickup (newStatus = false)
+        // Only admin can do this
+        if (currentUserRole !== 'admin') {
+            showPopup('Akses Ditolak', 'Hanya <b>Sekretariat</b> yang dapat membatalkan status "Sudah Diambil".<br><br>Hubungi admin jika ada kesalahan.', true);
+            return;
+        }
+        
+        showConfirm(
+            'Batalkan Pengambilan',
+            `Batalkan status "Sudah Diambil" untuk tiket <b>${nomorAntrian}</b>?`,
+            'YA, BATALKAN',
+            async () => {
+                await executePickupUpdate(nomorAntrian, newStatus);
+            }
+        );
+    }
+}
 
+async function executePickupUpdate(nomorAntrian, newStatus) {
     // Update ALL rows for this customer to have picked_up = newStatus
     const { error } = await supabaseClient
         .from('queues')
@@ -333,6 +370,9 @@ async function togglePickup(nomorAntrian, isPickedUp) {
         showPopup('Error', 'Gagal update status: ' + error.message, true);
         return;
     }
+    
+    const statusText = newStatus ? 'sudah diambil' : 'belum diambil';
+    showPopup('Berhasil', `✅ Status tiket <b>${nomorAntrian}</b> berhasil diubah menjadi <b>${statusText}</b>.`);
 
     // Local state is updated via Realtime Subscription automatically!
 }

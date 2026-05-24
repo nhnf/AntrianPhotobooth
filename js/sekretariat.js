@@ -115,6 +115,7 @@ function groupCustomers() {
                 payment_status: row.payment_status || 'belum_lunas',
                 payment_method: row.payment_method || null,
                 notes: row.notes || '',
+                picked_up: false,
                 items: [],
                 totalFoto: 0,
                 totalPigura: 0,
@@ -134,11 +135,12 @@ function groupCustomers() {
         g.totalFoto += (row.jumlah_foto || 0);
         g.totalPigura += (row.pigura || 0);
         g.statuses.push(row.status);
-        // Keep the latest notes and payment status
+        // Keep the latest notes, payment status, and pickup status
         if (row.notes) g.notes = row.notes;
         if (row.payment_status) g.payment_status = row.payment_status;
         if (row.payment_method) g.payment_method = row.payment_method;
         if (row.no_wa) g.no_wa = row.no_wa;
+        if (row.picked_up) g.picked_up = true; // If any row is picked up, mark as picked up
     });
 
     // Calculate total price
@@ -623,9 +625,15 @@ function renderCustomerTable() {
                   '<div class="text-[10px] font-black uppercase text-black bg-gray-200 border-2 border-black px-1 py-0.5 hover:bg-black hover:text-white">➖ KOSONG</div>'}
                 </button>
                 <button onclick="togglePayment('${c.nomor_antrian}')"
-                    class="payment-badge inline-block px-3 py-2 font-black text-xs uppercase border-3 border-black shadow-[2px_2px_0px_0px_#000] ${isLunas ? 'bg-neoGreen' : 'bg-neoRed'}">
+                    class="payment-badge inline-block px-3 py-2 font-black text-xs uppercase border-3 border-black shadow-[2px_2px_0px_0px_#000] ${isLunas ? 'bg-neoGreen' : 'bg-neoRed'} w-full mb-1">
                     ${isLunas ? '✅ LUNAS' : '❌ BELUM'}
                 </button>
+                ${allFinished ? `
+                <button onclick="togglePickupStatus('${c.nomor_antrian}')"
+                    class="payment-badge inline-block px-3 py-2 font-black text-xs uppercase border-3 border-black shadow-[2px_2px_0px_0px_#000] ${c.picked_up ? 'bg-neoCyan' : 'bg-white'} w-full">
+                    ${c.picked_up ? '📦 DIAMBIL' : '📦 BELUM'}
+                </button>
+                ` : ''}
             </td>
             <td class="p-3">
                 <input type="text" value="${escapeHTML(c.notes)}" placeholder="..."
@@ -706,6 +714,38 @@ async function togglePaymentMethod(nomorAntrian) {
     });
 
     applyFilters();
+}
+
+// ============================================
+// Pickup Status Toggle
+// ============================================
+async function togglePickupStatus(nomorAntrian) {
+    const customer = groupedCustomers.find(c => c.nomor_antrian === nomorAntrian);
+    if (!customer) return;
+
+    const newStatus = !customer.picked_up;
+    const statusText = newStatus ? 'SUDAH DIAMBIL' : 'BELUM DIAMBIL';
+
+    showConfirm('Ubah Status Pengambilan', `Ubah status pengambilan tiket <b>${nomorAntrian}</b> menjadi <b>${statusText}</b>?`, 'UBAH', async () => {
+        const { error } = await supabaseClient
+            .from('queues')
+            .update({ picked_up: newStatus })
+            .eq('nomor_antrian', nomorAntrian);
+
+        if (error) {
+            showPopup('Error', 'Gagal mengubah status pengambilan: ' + error.message, true);
+            return;
+        }
+
+        // Update local data
+        customer.picked_up = newStatus;
+        allCustomerData.forEach(row => {
+            if (row.nomor_antrian === nomorAntrian) row.picked_up = newStatus;
+        });
+
+        applyFilters();
+        showPopup('Berhasil', `✅ Status pengambilan tiket <b>${nomorAntrian}</b> berhasil diubah menjadi <b>${statusText}</b>.`);
+    });
 }
 
 // ============================================
