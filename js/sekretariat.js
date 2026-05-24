@@ -582,10 +582,28 @@ function renderCustomerTable() {
         });
         if (c.totalPigura > 0) purchaseLines.push(`🖼️ Pigura (${c.totalPigura}x)`);
         
+        // Tampilkan status pengambilan
         if (allFinished && c.picked_up) {
             purchaseLines.push(`<div class="mt-1 text-neoGreen">📦 Sudah Diambil</div>`);
         } else if (allFinished && !c.picked_up) {
             purchaseLines.push(`<div class="mt-1 text-neoRed font-black">📦 Belum Diambil</div>`);
+        }
+        
+        // Tampilkan badge selisih pembayaran dari notes
+        if (c.notes) {
+            if (c.notes.includes('Kurang bayar:')) {
+                // Badge merah untuk kurang bayar
+                const match = c.notes.match(/Kurang bayar: (Rp[\d.,]+)/);
+                if (match) {
+                    purchaseLines.push(`<div class="mt-1.5 text-neoRed font-bold flex items-center gap-1">⚠️ ${match[0]}</div>`);
+                }
+            } else if (c.notes.includes('Kelebihan bayar:')) {
+                // Badge hijau untuk kelebihan bayar
+                const match = c.notes.match(/Kelebihan bayar: (Rp[\d.,]+)/);
+                if (match) {
+                    purchaseLines.push(`<div class="mt-1.5 text-green-600 font-bold flex items-center gap-1">💰 ${match[0]}</div>`);
+                }
+            }
         }
 
         let rowClass = '';

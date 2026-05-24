@@ -417,6 +417,57 @@ function updatePaymentUI() {
 }
 
 // ============================================
+// Price Difference Calculation (for Edit Mode)
+// ============================================
+
+/**
+ * Hitung selisih harga antara pesanan lama dan baru
+ * @returns {Promise<Object>} { oldTotal, newTotal, difference, needsPayment, needsRefund, wasLunas }
+ */
+async function calculatePriceDifference() {
+    // Hitung total harga baru
+    const selectedBgs = backgrounds.filter(bg => bgQuantities[bg.id] > 0);
+    const newTotal = selectedBgs.reduce((sum, bg) => 
+        sum + (bgQuantities[bg.id] * HARGA_PER_FOTO), 0) + 
+        (piguraQty * HARGA_PIGURA);
+    
+    // Ambil data pesanan lama
+    const { data: oldData, error } = await supabaseClient
+        .from('queues')
+        .select('jumlah_foto, pigura, payment_status')
+        .eq('nomor_antrian', originalQueueId);
+    
+    if (error || !oldData || oldData.length === 0) {
+        return { 
+            oldTotal: 0, 
+            newTotal, 
+            difference: newTotal, 
+            needsPayment: true,
+            needsRefund: false,
+            wasLunas: false 
+        };
+    }
+    
+    // Hitung total harga lama
+    const oldTotal = oldData.reduce((sum, row) => 
+        sum + (row.jumlah_foto * HARGA_PER_FOTO) + ((row.pigura || 0) * HARGA_PIGURA), 0);
+    
+    const difference = newTotal - oldTotal;
+    const wasLunas = oldData[0].payment_status === 'lunas';
+    const needsPayment = wasLunas && difference > 0;
+    const needsRefund = wasLunas && difference < 0;
+    
+    return { 
+        oldTotal, 
+        newTotal, 
+        difference, 
+        needsPayment,
+        needsRefund,
+        wasLunas 
+    };
+}
+
+// ============================================
 // Submit Queue
 // ============================================
 let pendingQueueData = null;
@@ -458,7 +509,34 @@ async function submitQueue() {
 
     pendingQueueData = { nama, kelas, alamat, noWa, selectedBgs };
 
+    // KONFIRMASI KHUSUS untuk edit pesanan yang sudah lunas dengan perubahan harga
     if (isEditMode) {
+        const priceInfo = await calculatePriceDifference();
+        
+        if (priceInfo.wasLunas && priceInfo.difference !== 0) {
+            let confirmMessage = '';
+            let confirmTitle = '';
+            
+            if (priceInfo.needsPayment) {
+                // Harga naik - perlu bayar tambahan
+                confirmTitle = '⚠️ Perubahan Harga';
+                confirmMessage = `Harga pesanan akan naik dari <b>${formatCurrency(priceInfo.oldTotal)}</b> menjadi <b>${formatCurrency(priceInfo.newTotal)}</b>.<br><br>` +
+                    `Anda perlu membayar tambahan sebesar <b>${formatCurrency(priceInfo.difference)}</b>.<br><br>` +
+                    `Lanjutkan?`;
+            } else if (priceInfo.needsRefund) {
+                // Harga turun - ada kelebihan bayar
+                confirmTitle = '💰 Perubahan Harga';
+                confirmMessage = `Harga pesanan akan turun dari <b>${formatCurrency(priceInfo.oldTotal)}</b> menjadi <b>${formatCurrency(priceInfo.newTotal)}</b>.<br><br>` +
+                    `Kelebihan bayar sebesar <b>${formatCurrency(Math.abs(priceInfo.difference))}</b> akan dikembalikan.<br><br>` +
+                    `Lanjutkan?`;
+            }
+            
+            showConfirm(confirmTitle, confirmMessage, 'YA, LANJUTKAN', async () => {
+                await executeSubmitQueue(null, null);
+            });
+            return;
+        }
+        
         await executeSubmitQueue(null, null);
     } else {
         await executeSubmitQueue(paymentMethod, paymentChannel);
@@ -516,7 +594,8 @@ async function executeSubmitQueue(paymentMethod, paymentChannel) {
 
         myQueueId = rpcResult.nomor_antrian;
         const insertedData = rpcResult.rows;
-             // Update payment method & channel in database if not edit mode
+        
+        // Update payment method & channel in database if not edit mode
         if (!isEditMode && paymentMethod) {
             await supabaseClient
                 .from('queues')
@@ -528,8 +607,60 @@ async function executeSubmitQueue(paymentMethod, paymentChannel) {
                 
             updateTicketPaymentUI(paymentMethod, paymentChannel);
         } else if (isEditMode) {
-            // Fetch current payment method
-            const { data: qData } = await supabaseClient.from('queues').select('payment_method, payment_channel, payment_status').eq('nomor_antrian', myQueueId).limit(1).single();
+            // SMART PAYMENT STATUS: Hitung selisih harga dan update status
+            const priceInfo = await calculatePriceDifference();
+            
+            let newPaymentStatus = null;
+            let notesMessage = '';
+            let popupMessage = '';
+            
+            if (priceInfo.wasLunas) {
+                if (priceInfo.needsPayment) {
+                    // Harga naik → status jadi belum lunas
+                    newPaymentStatus = 'belum_lunas';
+                    notesMessage = `Kurang bayar: ${formatCurrency(priceInfo.difference)} (dari ${formatCurrency(priceInfo.oldTotal)} → ${formatCurrency(priceInfo.newTotal)})`;
+                    popupMessage = `⚠️ <b>Perubahan Harga</b><br><br>` +
+                        `Total harga berubah dari ${formatCurrency(priceInfo.oldTotal)} menjadi ${formatCurrency(priceInfo.newTotal)}.<br><br>` +
+                        `Anda perlu membayar tambahan sebesar <b>${formatCurrency(priceInfo.difference)}</b>.`;
+                } else if (priceInfo.needsRefund) {
+                    // Harga turun → tetap lunas, ada kelebihan bayar
+                    newPaymentStatus = 'lunas';
+                    notesMessage = `Kelebihan bayar: ${formatCurrency(Math.abs(priceInfo.difference))} (akan dikembalikan)`;
+                    popupMessage = `💰 <b>Perubahan Harga</b><br><br>` +
+                        `Total harga berubah dari ${formatCurrency(priceInfo.oldTotal)} menjadi ${formatCurrency(priceInfo.newTotal)}.<br><br>` +
+                        `Kelebihan bayar sebesar <b>${formatCurrency(Math.abs(priceInfo.difference))}</b> akan dikembalikan ke Anda.`;
+                } else {
+                    // Harga sama → tetap lunas
+                    newPaymentStatus = 'lunas';
+                }
+                
+                // Update payment_status dan notes di database
+                if (newPaymentStatus) {
+                    await supabaseClient
+                        .from('queues')
+                        .update({ 
+                            payment_status: newPaymentStatus,
+                            notes: notesMessage
+                        })
+                        .eq('nomor_antrian', myQueueId);
+                }
+                
+                // Tampilkan popup notifikasi jika ada perubahan harga
+                if (popupMessage) {
+                    setTimeout(() => {
+                        showPopup('Informasi Pembayaran', popupMessage);
+                    }, 500);
+                }
+            }
+            
+            // Fetch current payment status untuk update UI
+            const { data: qData } = await supabaseClient
+                .from('queues')
+                .select('payment_method, payment_channel, payment_status')
+                .eq('nomor_antrian', myQueueId)
+                .limit(1)
+                .single();
+                
             if (qData) {
                 if (qData.payment_status === 'lunas') {
                     document.getElementById('ticket-payment-status').innerHTML = '✅ LUNAS';
