@@ -73,6 +73,18 @@
             </p>
         </div>
 
+        <!-- Booth Status Overlay (untuk "belum dibuka") -->
+        <div id="booth-status-overlay" class="hidden absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-6 pt-8">
+            <div class="bg-neoYellow border-4 border-black shadow-[8px_8px_0px_0px_#000] p-6 max-w-md w-full text-center">
+                <div id="booth-status-overlay-content" class="font-bold text-lg"></div>
+            </div>
+        </div>
+
+        <!-- Quota Alert (untuk info kuota, di dalam form) -->
+        <div id="quota-alert" class="hidden mx-6 mt-6 mb-4 p-4 border-4 border-black shadow-[4px_4px_0px_0px_#000] text-center">
+            <div id="quota-alert-content" class="font-bold"></div>
+        </div>
+
         <div class="p-6 flex-1 flex flex-col relative z-0">
 
             <div class="text-center mb-6">

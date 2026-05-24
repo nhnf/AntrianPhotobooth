@@ -1009,25 +1009,210 @@ function escapeHTML(str) {
 function renderBoothManagement() {
     const container = document.getElementById('booth-management-list');
     if (!container) return;
-    container.innerHTML = allBooths.map(b => `
-        <div class="flex flex-wrap items-center gap-2 p-3 border-2 border-black bg-white shadow-[2px_2px_0px_0px_#000]">
-            <span class="font-black uppercase flex-1 min-w-[120px]">${b.nama_booth}</span>
-            <span class="font-mono bg-neoCyan border-2 border-black px-2 py-0.5 text-sm font-bold">${b.ticket_prefix}</span>
-            <input type="text" id="edit-name-${b.id}" value="${b.nama_booth}"
-                class="border-2 border-black px-2 py-1 text-sm font-bold w-32 focus:outline-none focus:ring-2 focus:ring-neoCyan">
-            <input type="text" id="edit-prefix-${b.id}" value="${b.ticket_prefix}"
-                class="border-2 border-black px-2 py-1 text-sm font-bold w-20 uppercase focus:outline-none focus:ring-2 focus:ring-neoCyan"
-                maxlength="5">
-            <button onclick="saveBooth(${b.id})"
-                class="neo-button bg-neoGreen font-bold uppercase py-1 px-3 text-sm">Simpan</button>
-            <button onclick="showBoothQR(${b.id})"
-                class="neo-button bg-neoCyan font-bold uppercase py-1 px-3 text-sm">📱 QR Customer</button>
-            <button onclick="copyBoothURL(${b.id}, 'monitor')"
-                class="neo-button bg-neoYellow font-bold uppercase py-1 px-3 text-sm">📺 Monitor</button>
-            <button onclick="deleteBooth(${b.id})"
-                class="neo-button bg-white border-neoRed font-bold uppercase py-1 px-3 text-sm text-red-600">Hapus</button>
+    container.innerHTML = allBooths.map(b => {
+        const salesDatetime = b.sales_start_datetime ? formatDatetimeLocal(b.sales_start_datetime) : '';
+        const isUnlimited = b.max_capacity === null || b.max_capacity === undefined;
+        const currentCount = b.current_ticket_count || 0;
+        const maxCap = b.max_capacity || 30;
+        
+        return `
+        <div class="border-4 border-black bg-white shadow-[4px_4px_0px_0px_#000] mb-3">
+            <!-- Header: Nama & Prefix -->
+            <div class="flex flex-wrap items-center gap-2 p-3 bg-neoYellow border-b-4 border-black">
+                <span class="font-black uppercase flex-1 min-w-[120px]">${b.nama_booth}</span>
+                <span class="font-mono bg-black text-white border-2 border-black px-2 py-0.5 text-sm font-bold">${b.ticket_prefix}</span>
+                <input type="text" id="edit-name-${b.id}" value="${b.nama_booth}"
+                    class="border-2 border-black px-2 py-1 text-sm font-bold w-32 focus:outline-none focus:ring-2 focus:ring-neoCyan">
+                <input type="text" id="edit-prefix-${b.id}" value="${b.ticket_prefix}"
+                    class="border-2 border-black px-2 py-1 text-sm font-bold w-20 uppercase focus:outline-none focus:ring-2 focus:ring-neoCyan"
+                    maxlength="5">
+                <button onclick="saveBooth(${b.id})"
+                    class="neo-button bg-neoGreen font-bold uppercase py-1 px-3 text-sm">💾 Simpan</button>
+            </div>
+            
+            <!-- Pengaturan Waktu & Kuota -->
+            <div class="p-4 space-y-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <!-- Waktu Mulai Penjualan -->
+                    <div class="flex flex-col gap-1">
+                        <label class="font-mono text-xs font-bold uppercase flex items-center gap-2">
+                            ⏰ Tanggal & Jam Buka Penjualan
+                            <span class="text-[9px] font-normal text-gray-500">(Kosongkan = Selalu Buka)</span>
+                        </label>
+                        <input type="datetime-local" 
+                               id="sales-datetime-${b.id}" 
+                               value="${salesDatetime}"
+                               class="border-2 border-black px-3 py-2 font-bold focus:outline-none focus:ring-2 focus:ring-neoCyan">
+                    </div>
+                    
+                    <!-- Batas Kuota -->
+                    <div class="flex flex-col gap-1">
+                        <label class="font-mono text-xs font-bold uppercase flex items-center gap-2">
+                            🎫 Batas Kuota Tiket
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="checkbox" 
+                                       id="unlimited-${b.id}" 
+                                       ${isUnlimited ? 'checked' : ''}
+                                       onchange="toggleUnlimited(${b.id})"
+                                       class="w-4 h-4">
+                                <span class="text-[10px] font-normal">Tanpa Batas</span>
+                            </label>
+                        </label>
+                        <input type="number" 
+                               id="capacity-${b.id}" 
+                               value="${maxCap}"
+                               min="1"
+                               ${isUnlimited ? 'disabled' : ''}
+                               class="border-2 border-black px-3 py-2 font-bold focus:outline-none focus:ring-2 focus:ring-neoCyan disabled:bg-gray-100 disabled:text-gray-400">
+                    </div>
+                </div>
+                
+                <!-- Status Kuota & Reset -->
+                <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center p-3 bg-bgLight border-2 border-black">
+                    <div class="flex-1">
+                        <div class="font-mono text-xs font-bold uppercase text-gray-700 mb-1">📊 Status Kuota Saat Ini:</div>
+                        <div class="font-black text-2xl" id="quota-status-${b.id}">
+                            ${currentCount} / ${isUnlimited ? '∞' : maxCap}
+                        </div>
+                        ${!isUnlimited && maxCap > 0 ? `
+                        <div class="mt-1 h-2 bg-white border border-black overflow-hidden">
+                            <div class="h-full bg-neoCyan transition-all" style="width: ${Math.min((currentCount / maxCap) * 100, 100)}%"></div>
+                        </div>
+                        ` : ''}
+                    </div>
+                    <button onclick="resetQuota(${b.id})" 
+                            class="neo-button bg-neoPink font-bold uppercase py-2 px-4 text-sm whitespace-nowrap">
+                        🔄 Reset Counter
+                    </button>
+                </div>
+                
+                <!-- Tombol Simpan Pengaturan -->
+                <button onclick="saveBoothSettings(${b.id})" 
+                        class="w-full neo-button bg-neoGreen font-black uppercase py-3 px-4 text-base">
+                    💾 SIMPAN PENGATURAN WAKTU & KUOTA
+                </button>
+                
+                <!-- Tombol Aksi Lainnya -->
+                <div class="flex flex-wrap gap-2 pt-2 border-t-2 border-black">
+                    <button onclick="showBoothQR(${b.id})"
+                        class="flex-1 neo-button bg-neoCyan font-bold uppercase py-2 px-3 text-xs">📱 QR Customer</button>
+                    <button onclick="copyBoothURL(${b.id}, 'monitor')"
+                        class="flex-1 neo-button bg-neoYellow font-bold uppercase py-2 px-3 text-xs">📺 Monitor</button>
+                    <button onclick="deleteBooth(${b.id})"
+                        class="flex-1 neo-button bg-neoRed text-white font-bold uppercase py-2 px-3 text-xs">🗑️ Hapus</button>
+                </div>
+            </div>
         </div>
-    `).join('');
+        `;
+    }).join('');
+}
+
+// ============================================
+// Booth Quota & Schedule Management
+// ============================================
+
+function toggleUnlimited(boothId) {
+    const checkbox = document.getElementById(`unlimited-${boothId}`);
+    const input = document.getElementById(`capacity-${boothId}`);
+    if (checkbox && input) {
+        input.disabled = checkbox.checked;
+        if (checkbox.checked) {
+            input.classList.add('bg-gray-100', 'text-gray-400');
+        } else {
+            input.classList.remove('bg-gray-100', 'text-gray-400');
+        }
+    }
+}
+
+async function saveBoothSettings(boothId) {
+    const salesDatetimeInput = document.getElementById(`sales-datetime-${boothId}`);
+    const unlimitedCheckbox = document.getElementById(`unlimited-${boothId}`);
+    const capacityInput = document.getElementById(`capacity-${boothId}`);
+    
+    if (!salesDatetimeInput || !unlimitedCheckbox || !capacityInput) {
+        return showPopup('Error', 'Elemen form tidak ditemukan.', true);
+    }
+    
+    const salesDatetime = salesDatetimeInput.value ? new Date(salesDatetimeInput.value).toISOString() : null;
+    const isUnlimited = unlimitedCheckbox.checked;
+    const capacity = isUnlimited ? null : parseInt(capacityInput.value);
+    
+    if (!isUnlimited && (isNaN(capacity) || capacity < 1)) {
+        return showPopup('Error', 'Kuota harus minimal 1 tiket jika tidak unlimited.', true);
+    }
+    
+    try {
+        const { error } = await supabaseClient
+            .from('booths')
+            .update({
+                sales_start_datetime: salesDatetime,
+                max_capacity: capacity
+            })
+            .eq('id', boothId);
+            
+        if (error) throw error;
+        
+        await loadBooths();
+        renderBoothManagement();
+        
+        const booth = allBooths.find(b => b.id === boothId);
+        const boothName = booth?.nama_booth || 'Booth';
+        
+        let message = `✅ Pengaturan <b>${boothName}</b> berhasil disimpan!<br><br>`;
+        if (salesDatetime) {
+            message += `⏰ Penjualan dibuka: <b>${new Date(salesDatetime).toLocaleString('id-ID')}</b><br>`;
+        } else {
+            message += `⏰ Penjualan: <b>Selalu Buka</b><br>`;
+        }
+        if (capacity) {
+            message += `🎫 Kuota maksimal: <b>${capacity} tiket</b>`;
+        } else {
+            message += `🎫 Kuota: <b>Tanpa Batas</b>`;
+        }
+        
+        showPopup('Berhasil', message);
+    } catch (e) {
+        console.error(e);
+        showPopup('Gagal', 'Gagal menyimpan pengaturan: ' + e.message, true);
+    }
+}
+
+async function resetQuota(boothId) {
+    const booth = allBooths.find(b => b.id === boothId);
+    if (!booth) return;
+    
+    showConfirm(
+        'Reset Counter Kuota',
+        `Yakin ingin mereset counter kuota untuk <b>${booth.nama_booth}</b>?<br><br>Counter akan kembali ke <b>0</b>.`,
+        'YA, RESET',
+        async () => {
+            try {
+                const { error } = await supabaseClient.rpc('reset_booth_quota', {
+                    p_booth_id: boothId
+                });
+                
+                if (error) throw error;
+                
+                await loadBooths();
+                renderBoothManagement();
+                showPopup('Berhasil', `✅ Counter kuota <b>${booth.nama_booth}</b> berhasil direset!`);
+            } catch (e) {
+                console.error(e);
+                showPopup('Gagal', 'Gagal reset kuota: ' + e.message, true);
+            }
+        }
+    );
+}
+
+function formatDatetimeLocal(isoString) {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 async function saveBooth(boothId) {

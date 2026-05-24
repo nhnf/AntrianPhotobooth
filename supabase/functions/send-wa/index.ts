@@ -12,6 +12,8 @@ async function sendWaFonnte(noWa: string, message: string) {
   const formData = new URLSearchParams();
   formData.append("target", noWa);
   formData.append("message", message);
+  // Tambahkan jeda acak 1-2 detik untuk menghindari deteksi spam dari WhatsApp
+  formData.append("delay", "1-2");
 
   const response = await fetch("https://api.fonnte.com/send", {
     method: "POST",
@@ -79,7 +81,7 @@ serve(async (req) => {
         const rincianPigura = totalPigura > 0 ? `\n- Pigura (${totalPigura} pcs)` : '';
         const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 });
 
-        pesanWA = `Halo ${nama},\n\nTerima kasih telah mendaftar di Photobooth Mediatech An-Nur II!\n\nDetail Pendaftaran:\nNomor Tiket: *${nomorAntrian}*\nNama: ${nama}\nKelas: ${kelas}\nAlamat: ${alamat}\n\n*Pesanan Anda:*\n${rincianBg.join('\n')}${rincianPigura}\n\n*Total Biaya: ${formatter.format(totalHarga)}*\n\nSilakan selesaikan pembayaran agar antrian Anda dapat diproses.\n(Abaikan jika Anda sudah memilih Bayar Tunai di Kasir).`;
+        pesanWA = `Halo ${nama},\n\nTerima kasih telah mendaftar di Photobooth Mediatech An-Nur II!\n\nDetail Pendaftaran:\nNomor Tiket: *${nomorAntrian}*\nNama: ${nama}\nKelas: ${kelas}\nAlamat: ${alamat}\n\n*Pesanan Anda:*\n${rincianBg.join('\n')}${rincianPigura}\n\n*Total Biaya: ${formatter.format(totalHarga)}*\n\nSilakan selesaikan pembayaran agar antrian Anda dapat diproses.\n(Abaikan jika Anda sudah memilih Bayar Tunai di Kasir).\n\n---\n💡 *Tips: Simpan nomor ini agar Anda bisa menerima notifikasi panggilan antrian dengan lancar. Balas "OKE" jika Anda sudah siap mengantri!*`;
       }
     }
     else if (type === 'UPDATE' && oldRecord) {

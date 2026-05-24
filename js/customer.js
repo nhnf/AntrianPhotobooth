@@ -80,6 +80,151 @@ function applyBoothUI(booth) {
 
     // Update title halaman
     document.title = booth.nama_booth + ' - Antrian Photobooth';
+    
+    // Update booth status alert
+    updateBoothStatusAlert(booth);
+}
+
+// ============================================
+// Booth Status & Quota Display
+// ============================================
+
+let countdownInterval = null;
+
+function updateBoothStatusAlert(booth) {
+    const overlay = document.getElementById('booth-status-overlay');
+    const overlayContent = document.getElementById('booth-status-overlay-content');
+    const quotaAlert = document.getElementById('quota-alert');
+    const quotaContent = document.getElementById('quota-alert-content');
+    
+    if (!booth || !overlay || !overlayContent || !quotaAlert || !quotaContent) return;
+    
+    // Clear existing countdown
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+    
+    // Check sales time
+    const now = new Date();
+    const salesStart = booth.sales_start_datetime ? new Date(booth.sales_start_datetime) : null;
+    
+    if (salesStart && now < salesStart) {
+        // BELUM DIBUKA - Tampilkan sebagai OVERLAY yang menutupi form
+        const countdownEl = document.createElement('div');
+        countdownEl.id = 'countdown-display';
+        countdownEl.className = 'font-mono text-4xl font-black mt-4 mb-2';
+        
+        const updateCountdown = () => {
+            const now = new Date();
+            const diff = salesStart - now;
+            
+            if (diff <= 0) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+                // Reload booth info
+                loadBoothInfo(currentBoothId).then(info => {
+                    if (info) {
+                        currentBoothInfo = info;
+                        updateBoothStatusAlert(info);
+                    }
+                });
+                return;
+            }
+            
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            let countdownText = '';
+            if (days > 0) countdownText += `${days} hari `;
+            countdownText += `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            
+            countdownEl.textContent = countdownText;
+        };
+        
+        overlayContent.innerHTML = `
+            <div class="text-2xl font-black uppercase mb-2">PHOTOBOOTH<br>BELUM DIBUKA</div>
+            <div class="text-sm font-bold mb-4">Buka: ${salesStart.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}</div>
+        `;
+        overlayContent.appendChild(countdownEl);
+        
+        updateCountdown();
+        countdownInterval = setInterval(updateCountdown, 1000);
+        
+        overlay.classList.remove('hidden');
+        quotaAlert.classList.add('hidden');
+        
+    } else {
+        // SUDAH DIBUKA - Sembunyikan overlay
+        overlay.classList.add('hidden');
+        
+        // Check quota - tampilkan sebagai alert biasa di dalam form
+        if (booth.max_capacity !== null && booth.max_capacity !== undefined) {
+            const currentCount = booth.current_ticket_count || 0;
+            const remaining = booth.max_capacity - currentCount;
+            const percentage = (currentCount / booth.max_capacity) * 100;
+            
+            let bgColor = 'bg-neoGreen';
+            let message = '';
+            
+            if (remaining <= 0) {
+                bgColor = 'bg-neoPink';
+                message = `🎫 <b>KUOTA HABIS!</b> Tiket terjual: <b>${currentCount}/${booth.max_capacity}</b>`;
+            } else if (percentage >= 80) {
+                bgColor = 'bg-neoYellow';
+                message = `🎫 <b>HAMPIR HABIS!</b> Sisa kuota: <b>${remaining}/${booth.max_capacity}</b> tiket`;
+            } else {
+                message = `🎫 Sisa kuota: <b>${remaining}/${booth.max_capacity}</b> tiket`;
+            }
+            
+            quotaContent.innerHTML = message;
+            quotaAlert.className = `mx-6 mt-6 mb-4 p-4 border-4 border-black shadow-[4px_4px_0px_0px_#000] text-center ${bgColor}`;
+            quotaAlert.classList.remove('hidden');
+        } else {
+            quotaAlert.classList.add('hidden');
+        }
+    }
+}
+
+// ============================================
+// Booth Access Validation
+// ============================================
+
+async function validateBoothAccess(boothId) {
+    const booth = await loadBoothInfo(boothId);
+    if (!booth) {
+        return { allowed: false, message: 'Booth tidak ditemukan atau tidak aktif.' };
+    }
+    
+    // Update current booth info
+    currentBoothInfo = booth;
+    
+    // Check sales time
+    const now = new Date();
+    const salesStart = booth.sales_start_datetime ? new Date(booth.sales_start_datetime) : null;
+    
+    if (salesStart && now < salesStart) {
+        const timeStr = salesStart.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' });
+        return { 
+            allowed: false, 
+            message: `⏰ <b>Penjualan tiket belum dibuka.</b><br><br>Silakan kembali pada:<br><b>${timeStr}</b><br><br>Lihat countdown di atas untuk waktu tersisa.` 
+        };
+    }
+    
+    // Check quota
+    if (booth.max_capacity !== null && booth.max_capacity !== undefined) {
+        const currentCount = booth.current_ticket_count || 0;
+        if (currentCount >= booth.max_capacity) {
+            return { 
+                allowed: false, 
+                message: `🎫 <b>Maaf, kuota tiket sudah HABIS!</b><br><br>Tiket terjual: <b>${currentCount}/${booth.max_capacity}</b><br><br>Hubungi panitia untuk informasi lebih lanjut.` 
+            };
+        }
+    }
+    
+    return { allowed: true };
 }
 
 // ============================================
@@ -103,10 +248,12 @@ function initSystemChannel() {
     if (currentBoothId) {
         supabaseClient.channel('booth-sync-' + currentBoothId)
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'booths',
-                filter: 'id=eq.' + currentBoothId }, async () => {
-                // Reload info booth jika prefix/nama berubah
-                currentBoothInfo = await loadBoothInfo(currentBoothId);
-                if (currentBoothInfo) applyBoothUI(currentBoothInfo);
+                filter: 'id=eq.' + currentBoothId }, async (payload) => {
+                // Reload info booth jika prefix/nama/quota berubah
+                currentBoothInfo = payload.new;
+                if (currentBoothInfo) {
+                    applyBoothUI(currentBoothInfo);
+                }
             })
             .subscribe();
     }
@@ -120,6 +267,18 @@ initSystemChannel();
 // ============================================
 // Background Loading & Selection
 // ============================================
+async function loadBoothInfo(boothId) {
+    if (!boothId) return null;
+    const { data, error } = await supabaseClient
+        .from('booths')
+        .select('id, nama_booth, ticket_prefix, sales_start_datetime, max_capacity, current_ticket_count')
+        .eq('id', boothId)
+        .eq('is_active', true)
+        .single();
+    if (error || !data) return null;
+    return data;
+}
+
 async function loadBackgrounds() {
     try {
         const { data, error } = await supabaseClient
@@ -281,6 +440,15 @@ async function submitQueue() {
     if (!currentBoothId && !isEditMode) {
         return showPopup('Booth Tidak Diketahui', 'Buka halaman ini melalui QR Code yang disediakan panitia (URL harus menyertakan ?booth=ID).');
     }
+    
+    // VALIDASI WAKTU & KUOTA (skip jika edit mode)
+    if (!isEditMode) {
+        const validation = await validateBoothAccess(currentBoothId);
+        if (!validation.allowed) {
+            showPopup('Tidak Dapat Melanjutkan', validation.message);
+            return;
+        }
+    }
 
     const paymentMethod = document.querySelector('input[name="payment_method"]:checked').value;
     let paymentChannel = null;
@@ -418,7 +586,22 @@ async function executeSubmitQueue(paymentMethod, paymentChannel) {
 
     } catch (err) {
         console.error(err);
-        showPopup("Kesalahan Sistem", "Terjadi kesalahan: " + err.message);
+        
+        // Parse error messages from RPC function
+        let errorMessage = err.message || 'Terjadi kesalahan sistem';
+        
+        if (errorMessage.includes('SALES_NOT_OPEN:')) {
+            const timeStr = errorMessage.split(':')[1];
+            const salesTime = new Date(timeStr);
+            errorMessage = `⏰ <b>Penjualan tiket belum dibuka.</b><br><br>Silakan kembali pada:<br><b>${salesTime.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}</b>`;
+        } else if (errorMessage.includes('CAPACITY_FULL:')) {
+            const parts = errorMessage.split(':');
+            const current = parts[1];
+            const max = parts[2];
+            errorMessage = `🎫 <b>Maaf, kuota tiket sudah HABIS!</b><br><br>Tiket terjual: <b>${current}/${max}</b><br><br>Hubungi panitia untuk informasi lebih lanjut.`;
+        }
+        
+        showPopup("Kesalahan", errorMessage);
         resetApp();
     }
 }
