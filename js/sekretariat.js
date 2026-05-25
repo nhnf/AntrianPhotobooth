@@ -923,9 +923,24 @@ async function saveCustomerEdit() {
 // Realtime Subscription
 // ============================================
 function subscribeRealtime() {
+    // Subscribe to queue changes
     supabaseClient.channel('sekretariat-queues')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'queues' }, () => {
             fetchAllCustomers();
+        })
+        .subscribe();
+    
+    // Subscribe to booth changes (quota counter, config updates)
+    supabaseClient.channel('sekretariat-booths')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'booths' }, (payload) => {
+            // Update booth info in local state
+            const booth = allBooths.find(b => b.id === payload.new.id);
+            if (booth) {
+                // Update all booth properties
+                Object.assign(booth, payload.new);
+                // Re-render booth management panel to show updated quota
+                renderBoothManagement();
+            }
         })
         .subscribe();
 }

@@ -77,10 +77,15 @@ Sistem ini cocok untuk:
 - Booth-specific access control untuk staff
 - Independent queue per booth
 
-### 2. Real-time Queue System
-- Live updates tanpa refresh
-- Supabase Realtime subscriptions
-- Status tracking: Menunggu → Dipanggil → Selesai
+### 2. Real-time Synchronization System
+- Live updates tanpa refresh di semua dashboard
+- Supabase Realtime subscriptions untuk:
+  - Queue status changes (Menunggu → Dipanggil → Selesai)
+  - Booth configuration updates (nama, prefix, schedule)
+  - Quota counter updates (real-time capacity tracking)
+  - Payment status changes
+  - Pickup status changes
+- Full synchronization antar dashboard (Admin, Sekretariat, Customer, Monitor, Pengambilan)
 - Queue position monitoring
 
 ### 3. Payment Integration
@@ -244,7 +249,9 @@ Admin (Superuser)
 - ✅ Handle payment difference (kurang bayar/kelebihan bayar)
 
 #### Monitoring
-- ✅ Real-time queue updates
+- ✅ Real-time queue updates (auto-refresh)
+- ✅ Real-time booth config updates (nama, prefix, quota)
+- ✅ Real-time quota counter sync (customer daftar → sekretariat update instant)
 - ✅ Payment status overview
 - ✅ Quota monitoring
 - ✅ Photographer availability
@@ -662,8 +669,12 @@ Upload semua file ke web hosting (cPanel, FTP, dll.)
 
 **Solusi**:
 1. Cek Supabase Realtime status di dashboard
-2. Refresh halaman
-3. Cek browser console untuk error
+2. Pastikan browser tidak block WebSocket connections
+3. Refresh halaman (Ctrl+F5 untuk hard refresh)
+4. Cek browser console untuk error
+5. Verify subscriptions di Network tab (filter: ws://)
+
+**Catatan**: Semua dashboard sekarang subscribe ke perubahan booth config dan quota counter, jadi update harus instant tanpa refresh manual.
 
 ---
 
@@ -735,7 +746,13 @@ Check Edge Function logs:
 - ✨ Smart Payment Status untuk edit pesanan
 - ✨ Time-based access control & quota management
 - ✨ Pickup management dengan role-based access
+- ✨ Real-time synchronization improvements:
+  - Booth quota counter sync antar dashboard
+  - Booth config updates (nama, prefix) sync ke semua dashboard
+  - Payment status sync real-time
+  - Pickup status sync real-time
 - 🐛 Fix concurrent edit issues
+- 🐛 Fix booth quota counter tidak update di sekretariat
 
 ### v1.5.0 (2026-05-24)
 - ✨ Voice announcements di monitor
