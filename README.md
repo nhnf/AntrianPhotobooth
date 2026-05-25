@@ -103,9 +103,12 @@ Sistem ini cocok untuk:
 
 ### 5. Smart Payment Status
 - Auto-detect perubahan harga saat edit pesanan
-- Harga naik → Status jadi "Belum Lunas"
-- Harga turun → Kelebihan bayar dikembalikan
-- Tracking selisih pembayaran di notes
+- Harga naik → Status jadi "Belum Lunas" + badge "Kurang bayar Rp X"
+- Harga turun → Status tetap "Lunas" + badge "Kelebihan bayar Rp X"
+- **Bayar selisih online** — tombol "BAYAR SEKARANG" otomatis tagih cuma selisihnya, bukan total full
+- **Resolve via klik badge** di sekretariat — konfirmasi "sudah dilunasi/dikembalikan"
+- **Card Kas Diterima akurat** — cash on hand memperhitungkan piutang & refund pending
+- Notes manual sekretariat & auto payment notes terpisah (tidak saling tertimpa)
 
 ### 6. WhatsApp Notifications
 - Konfirmasi pendaftaran dengan detail pesanan
@@ -246,7 +249,10 @@ Admin (Superuser)
 - ✅ Filter by payment status
 - ✅ View order details
 - ✅ WhatsApp direct link
-- ✅ Handle payment difference (kurang bayar/kelebihan bayar)
+- ✅ Handle payment difference (kurang bayar/kelebihan bayar):
+  - Badge clickable di kolom Total — klik untuk resolve
+  - "Kurang bayar" → konfirmasi "Sudah dilunasi?" → status jadi lunas
+  - "Kelebihan bayar" → konfirmasi "Sudah dikembalikan?" → badge hilang
 
 #### Monitoring
 - ✅ Real-time queue updates (auto-refresh)
@@ -255,6 +261,8 @@ Admin (Superuser)
 - ✅ Payment status overview
 - ✅ Quota monitoring
 - ✅ Photographer availability
+- ✅ **Card "Kas Diterima"** — perhitungan akurat cash on hand (memperhitungkan kurang/kelebihan bayar)
+- ✅ Footer info: Total Piutang & Total Refund Pending
 
 ---
 
@@ -302,12 +310,14 @@ Admin (Superuser)
 - ✅ **Tunai**: Bayar di kasir
 - ✅ Check payment status
 - ✅ Auto-update status setelah bayar
+- ✅ **Bayar selisih online** — kalau edit pesanan dan harga naik, tombol "BAYAR SEKARANG" hanya tagih selisihnya
+- ✅ Popup konfirmasi sebelum redirect ke payment gateway
 
 #### Order Management
 - ✅ Edit pesanan (sebelum/sesudah bayar)
 - ✅ Smart payment status:
-  - Harga naik → Bayar selisih
-  - Harga turun → Kelebihan dikembalikan
+  - Harga naik → Status "Belum Lunas" + badge "Kurang bayar Rp X"
+  - Harga turun → Status tetap "Lunas" + badge "Kelebihan bayar Rp X"
   - Harga sama → Tetap lunas
 - ✅ Cancel edit
 - ✅ View order history
@@ -741,6 +751,37 @@ Check Edge Function logs:
 ---
 
 ## 📝 Changelog
+
+### v2.1.0 (2026-05-25)
+- ✨ **Pembayaran online untuk selisih harga** — saat customer edit pesanan dan ada kurang bayar, tombol "BAYAR SEKARANG" hanya menagih selisihnya (bukan total full)
+- ✨ Popup konfirmasi sebelum redirect ke payment gateway dengan rincian: total pesanan, sudah dibayar, kurang bayar
+- ✨ Webhook `payment-webhook` auto-clear payment notes saat pembayaran selisih sukses (preserve manual notes sekretariat)
+- ✨ **Card "Total Pendapatan" jadi "Kas Diterima"** — perhitungan akurat berdasarkan cash on hand:
+  - Lunas tanpa selisih: + totalHarga
+  - Lunas + kelebihan bayar (belum direfund): + totalHarga + kelebihan
+  - Belum lunas + kurang bayar: + (totalHarga − kurang bayar)
+  - Belum lunas tanpa info bayar: + 0
+- ✨ Footer card menampilkan piutang & refund pending
+- ✨ **Badge selisih bayar di kolom Total** sekretariat (sebelumnya di kolom Pembelian)
+- ✨ **Badge clickable** untuk resolve selisih:
+  - Klik badge "Kurang" → konfirmasi "Sudah dilunasi?" → status jadi lunas, badge hilang
+  - Klik badge "Lebih" → konfirmasi "Sudah dikembalikan?" → badge hilang
+- 🐛 Fix tombol "BAYAR SEKARANG" tidak muncul untuk customer online yang punya kurang bayar (sebelumnya selalu nampilin tombol tunai)
+- 🐛 Hapus popup "Informasi Pembayaran" duplikat setelah konfirmasi perubahan harga
+
+### v2.0.2 (2026-05-25)
+- 🐛 Fix notes muncul 2 kali di sekretariat (badge + input field)
+- ✨ Pisahkan notes manual (sekretariat) dari notes auto-generated (smart payment) dengan delimiter `\n---PAYMENT---\n`
+- ✨ Helper `parseNotesParts()` & `combineNotesParts()` di customer.js & sekretariat.js
+- 🐛 Notes manual sekretariat sekarang ter-preserve saat customer edit pesanan
+- 🐛 Auto payment notes ter-preserve saat sekretariat edit notes manual
+- 🐛 Backward compat untuk notes lama format flat
+
+### v2.0.1 (2026-05-25)
+- 🐛 Fix race condition di smart payment: priceInfo dihitung sebelum RPC `update_queue_order` agar `oldTotal` & `newTotal` akurat
+- 🐛 Fix notes "Kurang bayar / Kelebihan bayar" tidak muncul di customer page
+- ✨ Tambah helper `refreshPaymentStatusUI()` agar tampilan notes konsisten di restore, realtime update, dan submit
+- ✨ Notes selisih harga otomatis muncul juga via realtime subscription saat sekretariat ubah status
 
 ### v2.0.0 (2026-05-25)
 - ✨ Smart Payment Status untuk edit pesanan

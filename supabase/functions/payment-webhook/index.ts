@@ -63,12 +63,37 @@ serve(async (req) => {
             const supabaseServiceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
             const supabase = createClient(supabaseUrl, supabaseServiceRole);
 
-            // Update database
+            // Ambil notes lama untuk preserve manual notes & clear payment note (Kurang bayar)
+            const { data: existing } = await supabase
+                .from('queues')
+                .select('notes')
+                .eq('nomor_antrian', referenceId)
+                .limit(1)
+                .single();
+
+            let cleanedNotes = '';
+            if (existing && existing.notes) {
+                const PAYMENT_NOTE_DELIM = '\n---PAYMENT---\n';
+                const idx = existing.notes.indexOf(PAYMENT_NOTE_DELIM);
+                if (idx !== -1) {
+                    // Hanya simpan bagian manual notes
+                    cleanedNotes = existing.notes.substring(0, idx);
+                } else if (existing.notes.startsWith('Kurang bayar:') || existing.notes.startsWith('Kelebihan bayar:')) {
+                    // Format lama (flat) — auto payment note → bersihkan total
+                    cleanedNotes = '';
+                } else {
+                    // Tidak ada delimiter & bukan auto → manual notes saja
+                    cleanedNotes = existing.notes;
+                }
+            }
+
+            // Update database: lunas + clear payment notes (preserve manual notes)
             const { data, error } = await supabase
                 .from('queues')
                 .update({ 
                     payment_status: 'lunas',
-                    paid_at: new Date().toISOString()
+                    paid_at: new Date().toISOString(),
+                    notes: cleanedNotes
                 })
                 .eq('nomor_antrian', referenceId);
 

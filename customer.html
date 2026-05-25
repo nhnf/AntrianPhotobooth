@@ -7,6 +7,7 @@
     <title>Ambil Antrian - Photobooth</title>
     <meta name="description" content="Ambil tiket antrian Photobooth Mediatech An-Nur II secara online.">
     <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="assets/logo-mm.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -33,8 +34,10 @@
                 class="text-xl font-black uppercase tracking-tight border-b-4 border-black pb-1 mb-4 inline-block pr-4">
                 Perhatian</h2>
             <div id="popup-body" class="font-bold mb-6 text-sm leading-relaxed"></div>
-            <button onclick="closePopup()"
-                class="w-full bg-neoCyan text-black font-black uppercase py-3 border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[2px_2px_0px_0px_#000] active:translate-y-1 active:shadow-none transition-all">Tutup</button>
+            <div id="popup-actions" class="flex gap-3">
+                <button onclick="closePopup()"
+                    class="flex-1 bg-black text-white font-black uppercase px-4 py-3 hover:bg-neoCyan hover:text-black transition-colors border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000]">TUTUP</button>
+            </div>
         </div>
     </div>
 
@@ -340,7 +343,10 @@
     </div>
 
 
-
+    <!-- Load shared utilities and config -->
+    <script src="shared/config.js"></script>
+    <script src="shared/ui.js"></script>
+    
     <!-- Load page-specific logic -->
     <script src="js/customer.js?v=5"></script>
 </body>

@@ -15,6 +15,38 @@ let isIncomeVisible = true;
 let editBgQuantities = {};
 let editPiguraQty = 0;
 
+// ============================================
+// Notes helpers — pisahkan manual notes vs auto payment notes
+// Format DB: "manual_notes\n---PAYMENT---\nKurang bayar: ..."
+// ============================================
+const PAYMENT_NOTE_DELIM = '\n---PAYMENT---\n';
+
+function parseNotes(raw) {
+    if (!raw) return { manual: '', payment: '' };
+    const idx = raw.indexOf(PAYMENT_NOTE_DELIM);
+    if (idx === -1) {
+        // Backward compat: kalau notes lama berupa "Kurang bayar..." atau "Kelebihan bayar..."
+        // anggap itu auto payment note
+        if (raw.startsWith('Kurang bayar:') || raw.startsWith('Kelebihan bayar:')) {
+            return { manual: '', payment: raw };
+        }
+        return { manual: raw, payment: '' };
+    }
+    return {
+        manual: raw.substring(0, idx),
+        payment: raw.substring(idx + PAYMENT_NOTE_DELIM.length)
+    };
+}
+
+function combineNotes(manual, payment) {
+    manual = (manual || '').trim();
+    payment = (payment || '').trim();
+    if (!manual && !payment) return '';
+    if (!payment) return manual;
+    if (!manual) return PAYMENT_NOTE_DELIM + payment;
+    return manual + PAYMENT_NOTE_DELIM + payment;
+}
+
 const systemChannel = supabaseClient.channel('system-events', {
     config: { broadcast: { self: true } }
 });
@@ -428,8 +460,48 @@ function renderStatsCards() {
     const total = filteredCustomers.length;
     const lunas = filteredCustomers.filter(c => c.payment_status === 'lunas').length;
     const belum = filteredCustomers.filter(c => c.payment_status === 'belum_lunas').length;
-    const totalPendapatan = filteredCustomers.filter(c => c.payment_status === 'lunas').reduce((sum, c) => sum + c.totalHarga, 0);
     const totalFoto = filteredCustomers.reduce((sum, c) => sum + c.totalFoto, 0);
+    
+    // Hitung kas masuk aktual (cash on hand) dengan memperhitungkan selisih bayar
+    // - Lunas tanpa kelebihan = totalHarga (sudah dibayar penuh)
+    // - Lunas + kelebihan bayar (belum dikembalikan) = totalHarga + kelebihan
+    // - Belum lunas + kurang bayar = totalHarga - kurang bayar (sudah bayar sebagian)
+    // - Belum lunas tanpa info kurang bayar = 0 (belum bayar sama sekali)
+    let totalPendapatan = 0;
+    let totalKekurangan = 0;     // total piutang dari customer
+    let totalKelebihan = 0;      // total hutang yang harus dikembalikan
+    
+    filteredCustomers.forEach(c => {
+        const parsed = parseNotes(c.notes);
+        const paymentNote = parsed.payment || '';
+        
+        let kurangBayar = 0;
+        let kelebihanBayar = 0;
+        
+        const matchKurang = paymentNote.match(/Kurang bayar:\s*Rp\s*([\d.,]+)/);
+        const matchLebih = paymentNote.match(/Kelebihan bayar:\s*Rp\s*([\d.,]+)/);
+        
+        if (matchKurang) {
+            kurangBayar = parseInt(matchKurang[1].replace(/[.,]/g, '')) || 0;
+        }
+        if (matchLebih) {
+            kelebihanBayar = parseInt(matchLebih[1].replace(/[.,]/g, '')) || 0;
+        }
+        
+        if (c.payment_status === 'lunas') {
+            // Sudah lunas → kas masuk = totalHarga + kelebihan (cash di tangan)
+            totalPendapatan += c.totalHarga + kelebihanBayar;
+            totalKelebihan += kelebihanBayar;
+        } else {
+            // Belum lunas
+            if (kurangBayar > 0) {
+                // Sudah bayar sebagian (totalHarga - kurang)
+                totalPendapatan += (c.totalHarga - kurangBayar);
+                totalKekurangan += kurangBayar;
+            }
+            // Kalau belum lunas & tidak ada info kurang bayar → asumsi belum bayar (0)
+        }
+    });
 
     const bgStats = {};
     let totalPigura = 0;
@@ -468,6 +540,19 @@ function renderStatsCards() {
     `;
     extraSection.innerHTML = extraHtml;
 
+    // Footer info untuk card pendapatan
+    let pendapatanFooter = `dari ${lunas} customer lunas`;
+    const footerExtras = [];
+    if (totalKekurangan > 0) {
+        footerExtras.push(`<span class="text-neoRed">⚠️ Piutang: ${formatCurrency(totalKekurangan)}</span>`);
+    }
+    if (totalKelebihan > 0) {
+        footerExtras.push(`<span class="text-green-700">💰 Refund: ${formatCurrency(totalKelebihan)}</span>`);
+    }
+    if (footerExtras.length > 0) {
+        pendapatanFooter += `<br>${footerExtras.join(' · ')}`;
+    }
+
     section.innerHTML = `
         <div class="stat-card border-4 border-black bg-neoCyan p-4 shadow-[8px_8px_0px_0px_#000]">
             <div class="font-mono text-xs font-bold uppercase text-black/70">Total Pendaftar</div>
@@ -486,7 +571,7 @@ function renderStatsCards() {
         </div>
         <div class="stat-card border-4 border-black bg-neoYellow p-4 shadow-[8px_8px_0px_0px_#000]">
             <div class="flex justify-between items-start">
-                <div class="font-mono text-xs font-bold uppercase text-black/70">Total Pendapatan</div>
+                <div class="font-mono text-xs font-bold uppercase text-black/70" title="Kas yang sudah diterima (memperhitungkan kurang/kelebihan bayar)">Kas Diterima</div>
                 <button onclick="toggleIncomeVisibility()" class="text-xs border-2 border-black bg-white px-2 py-0.5 shadow-[2px_2px_0px_0px_#000] hover:translate-y-[1px] hover:shadow-[1px_1px_0px_0px_#000] transition-all">
                     ${isIncomeVisible ? '👁️' : '🙈'}
                 </button>
@@ -494,7 +579,7 @@ function renderStatsCards() {
             <div class="text-3xl md:text-4xl font-black tracking-tighter mt-1">
                 ${isIncomeVisible ? formatCurrency(totalPendapatan) : 'Rp ••••••••'}
             </div>
-            <div class="font-mono text-xs font-bold mt-1">dari ${lunas} customer lunas</div>
+            <div class="font-mono text-[10px] font-bold mt-1 leading-tight">${pendapatanFooter}</div>
         </div>
     `;
 }
@@ -589,20 +674,23 @@ function renderCustomerTable() {
             purchaseLines.push(`<div class="mt-1 text-neoRed font-black">📦 Belum Diambil</div>`);
         }
         
-        // Tampilkan badge selisih pembayaran dari notes
-        if (c.notes) {
-            if (c.notes.includes('Kurang bayar:')) {
-                // Badge merah untuk kurang bayar
-                const match = c.notes.match(/Kurang bayar: (Rp[\d.,]+)/);
-                if (match) {
-                    purchaseLines.push(`<div class="mt-1.5 text-neoRed font-bold flex items-center gap-1">⚠️ ${match[0]}</div>`);
-                }
-            } else if (c.notes.includes('Kelebihan bayar:')) {
-                // Badge hijau untuk kelebihan bayar
-                const match = c.notes.match(/Kelebihan bayar: (Rp[\d.,]+)/);
-                if (match) {
-                    purchaseLines.push(`<div class="mt-1.5 text-green-600 font-bold flex items-center gap-1">💰 ${match[0]}</div>`);
-                }
+        // Parse notes untuk separate manual vs auto payment notes
+        const parsedNotes = parseNotes(c.notes);
+        const paymentNote = parsedNotes.payment;
+        
+        // Siapkan badge selisih pembayaran (klik untuk resolve)
+        let paymentDiffBadge = '';
+        if (paymentNote) {
+            if (paymentNote.includes('Kurang bayar:')) {
+                const match = paymentNote.match(/Kurang bayar:\s*(Rp\s*[\d.,]+)/);
+                const amountText = match ? match[1] : '';
+                paymentDiffBadge = `<button onclick="resolvePaymentDiff('${c.nomor_antrian}', 'kurang')" title="Klik kalau sudah dilunasi"
+                    class="mt-1 text-[10px] font-black uppercase text-white bg-neoRed border-2 border-black px-1.5 py-0.5 inline-block hover:bg-black transition-colors cursor-pointer">⚠️ Kurang ${amountText}</button>`;
+            } else if (paymentNote.includes('Kelebihan bayar:')) {
+                const match = paymentNote.match(/Kelebihan bayar:\s*(Rp\s*[\d.,]+)/);
+                const amountText = match ? match[1] : '';
+                paymentDiffBadge = `<button onclick="resolvePaymentDiff('${c.nomor_antrian}', 'lebih')" title="Klik kalau sudah dikembalikan"
+                    class="mt-1 text-[10px] font-black uppercase text-white bg-green-600 border-2 border-black px-1.5 py-0.5 inline-block hover:bg-black transition-colors cursor-pointer">💰 Lebih ${amountText}</button>`;
             }
         }
 
@@ -635,6 +723,7 @@ function renderCustomerTable() {
             <td class="p-3 text-right">
                 <div class="font-black text-base">${formatCurrency(c.totalHarga)}</div>
                 <div class="font-mono text-[10px] text-gray-500">${c.totalFoto} foto${c.totalPigura > 0 ? ` + ${c.totalPigura} pigura` : ''}</div>
+                ${paymentDiffBadge}
             </td>
             <td class="p-3 text-center">
                 <button onclick="togglePaymentMethod('${c.nomor_antrian}')" class="mb-1 transition-transform hover:scale-105 active:scale-95 cursor-pointer block w-full">
@@ -654,7 +743,7 @@ function renderCustomerTable() {
                 ` : ''}
             </td>
             <td class="p-3">
-                <input type="text" value="${escapeHTML(c.notes)}" placeholder="..."
+                <input type="text" value="${escapeHTML(parsedNotes.manual)}" placeholder="..."
                     class="notes-input w-full border-2 border-black/30 px-2 py-1 text-xs font-bold focus:outline-none focus:border-black bg-transparent min-w-[100px]"
                     onchange="saveNotes('${c.nomor_antrian}', this.value)"
                     onfocus="this.classList.add('border-black', 'bg-white')"
@@ -767,14 +856,86 @@ async function togglePickupStatus(nomorAntrian) {
 }
 
 // ============================================
-// Notes inline save
+// Resolve payment difference (kurang/lebih bayar)
+// Dipanggil saat sekretariat klik badge di kolom Total
 // ============================================
-async function saveNotes(nomorAntrian, notes) {
-    const trimmed = notes.trim();
+async function resolvePaymentDiff(nomorAntrian, type) {
+    const customer = groupedCustomers.find(c => c.nomor_antrian === nomorAntrian);
+    if (!customer) return;
+
+    const parsed = parseNotes(customer.notes);
+    const paymentOnly = parsed.payment;
+
+    // Match jumlah dari payment note
+    let amountText = '';
+    const m = paymentOnly.match(/(Rp\s*[\d.,]+)/);
+    if (m) amountText = m[1];
+
+    let title, message, confirmText, newPaymentStatus;
+    if (type === 'kurang') {
+        title = '💵 Lunasi Kekurangan';
+        message = `Konfirmasi: Customer <b>${customer.nama_lengkap}</b> (${nomorAntrian}) sudah melunasi kekurangan sebesar <b>${amountText}</b>?<br><br>Status akan berubah jadi <b>LUNAS</b> dan badge selisih dihapus.`;
+        confirmText = '✅ SUDAH DILUNASI';
+        newPaymentStatus = 'lunas';
+    } else {
+        title = '💰 Kembalikan Kelebihan';
+        message = `Konfirmasi: Kelebihan bayar sebesar <b>${amountText}</b> sudah dikembalikan ke customer <b>${customer.nama_lengkap}</b> (${nomorAntrian})?<br><br>Badge kelebihan bayar akan dihapus.`;
+        confirmText = '✅ SUDAH DIKEMBALIKAN';
+        newPaymentStatus = 'lunas';
+    }
+
+    showConfirm(title, message, confirmText, async () => {
+        // Hapus payment note, preserve manual notes
+        const newCombined = combineNotes(parsed.manual, '');
+
+        const { error } = await supabaseClient
+            .from('queues')
+            .update({
+                payment_status: newPaymentStatus,
+                notes: newCombined
+            })
+            .eq('nomor_antrian', nomorAntrian);
+
+        if (error) {
+            showPopup('Error', 'Gagal menyimpan: ' + error.message, true);
+            return;
+        }
+
+        // Update local state
+        customer.notes = newCombined;
+        customer.payment_status = newPaymentStatus;
+        allCustomerData.forEach(row => {
+            if (row.nomor_antrian === nomorAntrian) {
+                row.notes = newCombined;
+                row.payment_status = newPaymentStatus;
+            }
+        });
+
+        applyFilters();
+        showPopup('Berhasil',
+            type === 'kurang'
+                ? `✅ Pembayaran <b>${nomorAntrian}</b> sudah dilunasi.`
+                : `✅ Kelebihan bayar <b>${nomorAntrian}</b> sudah dikembalikan.`
+        );
+    });
+}
+
+// ============================================
+// Notes inline save (preserves auto payment notes)
+// ============================================
+async function saveNotes(nomorAntrian, manualNotes) {
+    const trimmed = (manualNotes || '').trim();
+
+    // Cari customer dan ambil payment note yang ada
+    const customer = groupedCustomers.find(c => c.nomor_antrian === nomorAntrian);
+    const existingPayment = customer ? parseNotes(customer.notes).payment : '';
+
+    // Gabungkan manual notes baru dengan payment notes yang sudah ada
+    const combined = combineNotes(trimmed, existingPayment);
 
     const { error } = await supabaseClient
         .from('queues')
-        .update({ notes: trimmed })
+        .update({ notes: combined })
         .eq('nomor_antrian', nomorAntrian);
 
     if (error) {
@@ -783,10 +944,9 @@ async function saveNotes(nomorAntrian, notes) {
     }
 
     // Update local
-    const customer = groupedCustomers.find(c => c.nomor_antrian === nomorAntrian);
-    if (customer) customer.notes = trimmed;
+    if (customer) customer.notes = combined;
     allCustomerData.forEach(row => {
-        if (row.nomor_antrian === nomorAntrian) row.notes = trimmed;
+        if (row.nomor_antrian === nomorAntrian) row.notes = combined;
     });
 }
 
@@ -802,7 +962,7 @@ function openEditModal(nomorAntrian) {
     document.getElementById('edit-kelas').value = customer.kelas === '-' ? '' : customer.kelas;
     document.getElementById('edit-alamat').value = customer.alamat === '-' ? '' : customer.alamat;
     document.getElementById('edit-wa').value = customer.no_wa || '';
-    document.getElementById('edit-notes').value = customer.notes || '';
+    document.getElementById('edit-notes').value = parseNotes(customer.notes).manual;
 
     // Initialize edit order state
     editBgQuantities = {};
@@ -879,7 +1039,12 @@ async function saveCustomerEdit() {
     const kelas = document.getElementById('edit-kelas').value.trim();
     const alamat = document.getElementById('edit-alamat').value.trim();
     const wa = document.getElementById('edit-wa').value.trim();
-    const notes = document.getElementById('edit-notes').value.trim();
+    const manualNotes = document.getElementById('edit-notes').value.trim();
+
+    // Preserve auto payment notes (kurang/kelebihan bayar)
+    const customer = groupedCustomers.find(c => c.nomor_antrian === nomorAntrian);
+    const existingPayment = customer ? parseNotes(customer.notes).payment : '';
+    const notes = combineNotes(manualNotes, existingPayment);
 
     if (!nama) {
         showPopup('Error', 'Nama tidak boleh kosong.', true);
