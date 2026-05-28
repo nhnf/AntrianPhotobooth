@@ -213,6 +213,27 @@ async function loadData() {
 // ============================================
 // Render UI
 // ============================================
+
+/**
+ * Auto-scale font size untuk nama panjang agar tetap terbaca.
+ * Dipanggil setelah render/update nama.
+ */
+function autoScaleName(el) {
+    if (!el) return;
+    const name = el.textContent.trim();
+    // Tentukan ukuran font berdasarkan panjang nama
+    if (name.length <= 12) {
+        el.className = el.className.replace(/text-\[[\d.]+rem\]|text-\w+(?=\s)/g, '');
+        el.style.fontSize = '';
+    } else if (name.length <= 20) {
+        el.style.fontSize = 'clamp(1rem, 3vw, 1.75rem)';
+    } else if (name.length <= 30) {
+        el.style.fontSize = 'clamp(0.85rem, 2.5vw, 1.4rem)';
+    } else {
+        el.style.fontSize = 'clamp(0.75rem, 2vw, 1.1rem)';
+    }
+}
+
 function renderColumns() {
     const container = document.getElementById('monitor-columns');
     const colors = ['bg-neoCyan', 'bg-neoPink', 'bg-neoYellow', 'bg-neoGreen'];
@@ -240,7 +261,7 @@ function renderColumns() {
                     ${num}
                 </div>
 
-                <div id="name-bg-${bg.id}" class="text-lg md:text-2xl lg:text-3xl font-bold uppercase bg-black text-white px-2 md:px-4 py-1 md:py-2 text-center w-full leading-tight border-4 border-black transition-all duration-300 line-clamp-1 ${called ? '' : 'opacity-0 scale-95'}">
+                <div id="name-bg-${bg.id}" class="text-lg md:text-2xl lg:text-3xl font-bold uppercase bg-black text-white px-2 md:px-4 py-1 md:py-2 text-center w-full leading-tight border-4 border-black transition-all duration-300 break-words ${called ? '' : 'opacity-0 scale-95'}">
                     ${called ? escapeHTML(called.nama_lengkap) : '-'}
                 </div>
                 
@@ -266,6 +287,11 @@ function renderColumns() {
         </div>
         `;
     }).join('');
+    
+    // Auto-scale nama setelah render
+    backgrounds.forEach(bg => {
+        autoScaleName(document.getElementById(`name-bg-${bg.id}`));
+    });
 }
 
 // ============================================
@@ -417,6 +443,7 @@ function updateColumnUI(bgId, number, isJustCalled, record) {
         kelasEl.textContent = 'KLS: ' + record.kelas;
         nameEl.classList.remove('opacity-0', 'scale-95');
         kelasEl.classList.remove('opacity-0', 'scale-95');
+        autoScaleName(nameEl); // auto-scale font untuk nama panjang
     } else if (!isJustCalled) {
         nameEl.classList.add('opacity-0', 'scale-95');
         kelasEl.classList.add('opacity-0', 'scale-95');
