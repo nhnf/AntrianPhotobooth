@@ -68,9 +68,11 @@
 //         let rincianBg: string[] = [];
         
 //         if (allQueues) {
-//             allQueues.forEach((q: any) => {
+//             allQueues.forEach((q: any, index: number) => {
 //                 totalFoto += (q.jumlah_foto || 0);
-//                 totalPigura += (q.pigura || 0);
+//                 // BUG FIX: pigura disimpan di setiap row dengan nilai sama.
+//                 // Ambil hanya dari row pertama agar tidak dihitung N× lipat.
+//                 if (index === 0) totalPigura = (q.pigura || 0);
 //                 if (q.backgrounds && q.backgrounds.nama_background) {
 //                     rincianBg.push(`- ${q.backgrounds.nama_background} (${q.jumlah_foto} foto)`);
 //                 }
