@@ -140,6 +140,20 @@ function updateBoothStatusAlert(booth) {
     // Check sales time
     const now = new Date();
     const salesStart = booth.sales_start_datetime ? new Date(booth.sales_start_datetime) : null;
+    const salesEnd = booth.sales_end_datetime ? new Date(booth.sales_end_datetime) : null;
+    
+    // SUDAH TUTUP
+    if (salesEnd && now > salesEnd) {
+        overlayContent.innerHTML = `
+            <div class="text-3xl font-black uppercase mb-3">🔒 PHOTOBOOTH<br>SUDAH TUTUP</div>
+            <div class="text-sm font-bold text-white/80">Penjualan tiket telah berakhir pada:<br>
+            <b>${salesEnd.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}</b></div>
+            <div class="mt-4 text-xs font-mono text-white/60">Terima kasih telah berkunjung!</div>
+        `;
+        overlay.classList.remove('hidden');
+        quotaAlert.classList.add('hidden');
+        return;
+    }
     
     if (salesStart && now < salesStart) {
         // BELUM DIBUKA - Tampilkan sebagai OVERLAY yang menutupi form
@@ -236,6 +250,16 @@ async function validateBoothAccess(boothId) {
     // Check sales time
     const now = new Date();
     const salesStart = booth.sales_start_datetime ? new Date(booth.sales_start_datetime) : null;
+    const salesEnd = booth.sales_end_datetime ? new Date(booth.sales_end_datetime) : null;
+    
+    // Check jam tutup
+    if (salesEnd && now > salesEnd) {
+        const timeStr = salesEnd.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' });
+        return { 
+            allowed: false, 
+            message: `🔒 <b>Penjualan tiket sudah ditutup.</b><br><br>Penjualan berakhir pada:<br><b>${timeStr}</b><br><br>Terima kasih telah berkunjung!` 
+        };
+    }
     
     if (salesStart && now < salesStart) {
         const timeStr = salesStart.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' });
@@ -324,7 +348,7 @@ async function loadBoothInfo(boothId) {
     if (!boothId) return null;
     const { data, error } = await supabaseClient
         .from('booths')
-        .select('id, nama_booth, ticket_prefix, sales_start_datetime, max_capacity, current_ticket_count')
+        .select('id, nama_booth, ticket_prefix, sales_start_datetime, sales_end_datetime, max_capacity, current_ticket_count')
         .eq('id', boothId)
         .eq('is_active', true)
         .single();
@@ -913,6 +937,10 @@ async function executeSubmitQueue(paymentMethod, paymentChannel) {
             const timeStr = errorMessage.split(':')[1];
             const salesTime = new Date(timeStr);
             errorMessage = `⏰ <b>Penjualan tiket belum dibuka.</b><br><br>Silakan kembali pada:<br><b>${salesTime.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}</b>`;
+        } else if (errorMessage.includes('SALES_CLOSED:')) {
+            const timeStr = errorMessage.split(':')[1];
+            const closeTime = new Date(timeStr);
+            errorMessage = `🔒 <b>Penjualan tiket sudah ditutup.</b><br><br>Penjualan berakhir pada:<br><b>${closeTime.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}</b>`;
         } else if (errorMessage.includes('CAPACITY_FULL:')) {
             const parts = errorMessage.split(':');
             const current = parts[1];

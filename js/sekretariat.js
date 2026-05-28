@@ -1376,6 +1376,7 @@ function renderBoothManagement() {
     if (!container) return;
     container.innerHTML = allBooths.map(b => {
         const salesDatetime = b.sales_start_datetime ? formatDatetimeLocal(b.sales_start_datetime) : '';
+        const salesEndDatetime = b.sales_end_datetime ? formatDatetimeLocal(b.sales_end_datetime) : '';
         const isUnlimited = b.max_capacity === null || b.max_capacity === undefined;
         const currentCount = b.current_ticket_count || 0;
         const maxCap = b.max_capacity || 30;
@@ -1410,6 +1411,20 @@ function renderBoothManagement() {
                                class="border-2 border-black px-3 py-2 font-bold focus:outline-none focus:ring-2 focus:ring-neoCyan">
                     </div>
                     
+                    <!-- Waktu Tutup Penjualan -->
+                    <div class="flex flex-col gap-1">
+                        <label class="font-mono text-xs font-bold uppercase flex items-center gap-2">
+                            🔒 Tanggal & Jam Tutup Penjualan
+                            <span class="text-[9px] font-normal text-gray-500">(Kosongkan = Tidak Ada Batas)</span>
+                        </label>
+                        <input type="datetime-local" 
+                               id="sales-end-datetime-${b.id}" 
+                               value="${salesEndDatetime}"
+                               class="border-2 border-black px-3 py-2 font-bold focus:outline-none focus:ring-2 focus:ring-neoPink">
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <!-- Batas Kuota -->
                     <div class="flex flex-col gap-1">
                         <label class="font-mono text-xs font-bold uppercase flex items-center gap-2">
@@ -1491,6 +1506,7 @@ function toggleUnlimited(boothId) {
 
 async function saveBoothSettings(boothId) {
     const salesDatetimeInput = document.getElementById(`sales-datetime-${boothId}`);
+    const salesEndDatetimeInput = document.getElementById(`sales-end-datetime-${boothId}`);
     const unlimitedCheckbox = document.getElementById(`unlimited-${boothId}`);
     const capacityInput = document.getElementById(`capacity-${boothId}`);
     
@@ -1499,6 +1515,7 @@ async function saveBoothSettings(boothId) {
     }
     
     const salesDatetime = salesDatetimeInput.value ? new Date(salesDatetimeInput.value).toISOString() : null;
+    const salesEndDatetime = salesEndDatetimeInput?.value ? new Date(salesEndDatetimeInput.value).toISOString() : null;
     const isUnlimited = unlimitedCheckbox.checked;
     const capacity = isUnlimited ? null : parseInt(capacityInput.value);
     
@@ -1506,11 +1523,17 @@ async function saveBoothSettings(boothId) {
         return showPopup('Error', 'Kuota harus minimal 1 tiket jika tidak unlimited.', true);
     }
     
+    // Validasi: jam tutup harus setelah jam buka
+    if (salesDatetime && salesEndDatetime && new Date(salesEndDatetime) <= new Date(salesDatetime)) {
+        return showPopup('Error', 'Jam tutup harus setelah jam buka penjualan.', true);
+    }
+    
     try {
         const { error } = await supabaseClient
             .from('booths')
             .update({
                 sales_start_datetime: salesDatetime,
+                sales_end_datetime: salesEndDatetime,
                 max_capacity: capacity
             })
             .eq('id', boothId);
