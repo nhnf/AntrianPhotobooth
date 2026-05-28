@@ -44,7 +44,7 @@ async function loadBoothInfo(boothId) {
 // Constants
 // ============================================
 const HARGA_PER_FOTO = 40000;
-const HARGA_PIGURA = 35000;
+const HARGA_PIGURA = 25000;
 
 const STATUS = {
     MENUNGGU: 'menunggu',

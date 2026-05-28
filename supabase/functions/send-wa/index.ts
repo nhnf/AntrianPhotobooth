@@ -79,7 +79,7 @@ serve(async (req) => {
             });
         }
         
-        const totalHarga = (totalFoto * 40000) + (totalPigura * 35000);
+        const totalHarga = (totalFoto * 40000) + (totalPigura * 25000);
         const rincianPigura = totalPigura > 0 ? `\n- Pigura (${totalPigura} pcs)` : '';
         const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 });
 
