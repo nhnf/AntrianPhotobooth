@@ -223,36 +223,44 @@ function renderColumns() {
         const color = colors[index % colors.length];
 
         return `
-        <div id="card-bg-${bg.id}" class="neo-card-monitor bg-white rounded-none p-6 flex flex-col items-center justify-center min-h-[300px] md:min-h-[400px] lg:h-full relative w-full h-full">
+        <div id="card-bg-${bg.id}" class="neo-card-monitor bg-white rounded-none flex flex-col items-center min-h-[300px] md:min-h-[400px] lg:h-full relative w-full h-full overflow-hidden">
             
-            <div class="absolute top-0 left-0 w-full p-2 md:p-4 border-b-4 border-black ${color} text-black text-center z-10 shadow-[0px_4px_0px_0px_#000]">
+            <!-- Header background name -->
+            <div class="w-full p-2 md:p-4 border-b-4 border-black ${color} text-black text-center z-10 shadow-[0px_4px_0px_0px_#000] shrink-0">
                 <h2 class="text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black tracking-tight uppercase truncate px-2">
                     ${escapeHTML(bg.nama_background)}
                 </h2>
             </div>
             
-            <div class="mt-14 md:mt-20 text-sm md:text-xl font-mono font-bold mb-2 md:mb-3 tracking-widest uppercase border-b-2 border-black pb-1">Nomor Antrian</div>
-            
-            <div id="num-bg-${bg.id}" class="number-display text-6xl sm:text-7xl md:text-[6rem] lg:text-5xl xl:text-6xl 2xl:text-[7rem] whitespace-nowrap font-black tracking-tighter text-black leading-none mb-4 md:mb-6 transition-all duration-300">
-                ${num}
+            <!-- Main content -->
+            <div class="flex-1 flex flex-col items-center justify-center p-4 md:p-6 w-full">
+                <div class="text-sm md:text-xl font-mono font-bold mb-2 md:mb-3 tracking-widest uppercase border-b-2 border-black pb-1">Nomor Antrian</div>
+                
+                <div id="num-bg-${bg.id}" class="number-display text-6xl sm:text-7xl md:text-[6rem] lg:text-5xl xl:text-6xl 2xl:text-[7rem] whitespace-nowrap font-black tracking-tighter text-black leading-none mb-4 md:mb-6 transition-all duration-300">
+                    ${num}
+                </div>
+
+                <div id="name-bg-${bg.id}" class="text-lg md:text-2xl lg:text-3xl font-bold uppercase bg-black text-white px-2 md:px-4 py-1 md:py-2 text-center w-full leading-tight border-4 border-black transition-all duration-300 line-clamp-1 ${called ? '' : 'opacity-0 scale-95'}">
+                    ${called ? escapeHTML(called.nama_lengkap) : '-'}
+                </div>
+                
+                <div id="kelas-bg-${bg.id}" class="text-sm md:text-lg font-mono font-bold uppercase bg-white text-black border-4 border-black border-t-0 px-2 md:px-4 py-1 text-center w-[80%] md:w-3/4 leading-tight shadow-[4px_4px_0px_0px_#000] transition-all duration-300 ${called ? '' : 'opacity-0 scale-95'}">
+                    ${called ? 'KLS: ' + escapeHTML(called.kelas) : '-'}
+                </div>
             </div>
 
-            <div id="name-bg-${bg.id}" class="text-lg md:text-2xl lg:text-3xl font-bold uppercase bg-black text-white px-2 md:px-4 py-1 md:py-2 text-center w-[90%] md:w-full leading-tight border-4 border-black transition-all duration-300 ${called ? '' : 'opacity-0 scale-95'}">
-                ${called ? escapeHTML(called.nama_lengkap) : '-'}
-            </div>
-            
-            <div id="kelas-bg-${bg.id}" class="text-sm md:text-lg font-mono font-bold uppercase bg-white text-black border-4 border-black border-t-0 px-2 md:px-4 py-1 text-center w-[80%] md:w-3/4 leading-tight shadow-[4px_4px_0px_0px_#000] transition-all duration-300 mb-8 ${called ? '' : 'opacity-0 scale-95'}">
-                ${called ? 'KLS: ' + escapeHTML(called.kelas) : '-'}
-            </div>
-
-            <div id="msg-bg-${bg.id}" class="absolute bottom-12 bg-neoPink border-2 md:border-4 border-black px-4 md:px-6 py-2 md:py-3 shadow-[4px_4px_0px_0px_#000] md:shadow-[6px_6px_0px_0px_#000] text-sm md:text-xl lg:text-2xl font-black uppercase tracking-widest opacity-0 transition-all duration-300 z-20 pointer-events-none transform translate-y-4">
-                SILAKAN MASUK
+            <!-- SILAKAN MASUK badge -->
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                <div id="msg-bg-${bg.id}" class="bg-neoPink border-2 md:border-4 border-black px-4 md:px-6 py-2 md:py-3 shadow-[4px_4px_0px_0px_#000] md:shadow-[6px_6px_0px_0px_#000] text-sm md:text-xl lg:text-2xl font-black uppercase tracking-widest opacity-0 transition-all duration-300 transform translate-y-4">
+                    SILAKAN MASUK
+                </div>
             </div>
 
-            <div class="absolute bottom-0 left-0 w-full bg-neoYellow border-t-4 border-black p-2 md:p-4 text-center font-black uppercase flex flex-col items-center gap-0.5" id="next-bg-${bg.id}">
-                <span class="text-[10px] tracking-widest text-black/60">BERIKUTNYA</span>
-                <div class="text-sm md:text-xl lg:text-2xl leading-tight truncate w-full">
-                    ${nextInLine[bg.id] ? `${escapeHTML(nextInLine[bg.id].nomor_antrian)} — <span class="truncate">${escapeHTML(nextInLine[bg.id].nama_lengkap)}</span>` : '<span class="text-black/40">—</span>'}
+            <!-- BERIKUTNYA footer -->
+            <div class="w-full bg-neoYellow border-t-4 border-black px-3 py-2 md:py-3 text-center font-black uppercase shrink-0" id="next-bg-${bg.id}">
+                <div class="text-[9px] md:text-[10px] tracking-widest text-black/50 mb-0.5">BERIKUTNYA</div>
+                <div class="text-base md:text-xl lg:text-2xl leading-tight truncate">
+                    ${nextInLine[bg.id] ? `${escapeHTML(nextInLine[bg.id].nomor_antrian)} — ${escapeHTML(nextInLine[bg.id].nama_lengkap)}` : '<span class="text-black/30">—</span>'}
                 </div>
             </div>
         </div>
@@ -360,10 +368,10 @@ async function fetchNextInLine(bgId) {
 
     if (data) {
         nextInLine[bgId] = data;
-        nextEl.innerHTML = `<span class="text-[10px] tracking-widest text-black/60">BERIKUTNYA</span><div class="text-sm md:text-xl lg:text-2xl leading-tight truncate w-full">${escapeHTML(data.nomor_antrian)} — ${escapeHTML(data.nama_lengkap)}</div>`;
+        nextEl.innerHTML = `<div class="text-[9px] md:text-[10px] tracking-widest text-black/50 mb-0.5">BERIKUTNYA</div><div class="text-base md:text-xl lg:text-2xl leading-tight truncate">${escapeHTML(data.nomor_antrian)} — ${escapeHTML(data.nama_lengkap)}</div>`;
     } else {
         nextInLine[bgId] = null;
-        nextEl.innerHTML = `<span class="text-[10px] tracking-widest text-black/60">BERIKUTNYA</span><div class="text-sm md:text-xl lg:text-2xl text-black/40">—</div>`;
+        nextEl.innerHTML = `<div class="text-[9px] md:text-[10px] tracking-widest text-black/50 mb-0.5">BERIKUTNYA</div><div class="text-base md:text-xl lg:text-2xl text-black/30">—</div>`;
     }
 }
 
