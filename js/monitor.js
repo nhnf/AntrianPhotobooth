@@ -69,7 +69,7 @@ function toggleVoice() {
         btn.innerHTML = `<span class="text-lg">🔇</span><span class="leading-tight">Aktifkan<br>Suara</span>`;
         btn.classList.remove('bg-neoGreen');
         btn.classList.add('bg-neoYellow');
-        if (window.speechSynthesis) window.speechSynthesis.cancel();
+        cancelAllSpeech();
     }
 }
 
@@ -227,7 +227,7 @@ function renderColumns() {
             
             <div class="absolute top-0 left-0 w-full p-2 md:p-4 border-b-4 border-black ${color} text-black text-center z-10 shadow-[0px_4px_0px_0px_#000]">
                 <h2 class="text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black tracking-tight uppercase truncate px-2">
-                    ${bg.nama_background}
+                    ${escapeHTML(bg.nama_background)}
                 </h2>
             </div>
             
@@ -238,11 +238,11 @@ function renderColumns() {
             </div>
 
             <div id="name-bg-${bg.id}" class="text-lg md:text-2xl lg:text-3xl font-bold uppercase bg-black text-white px-2 md:px-4 py-1 md:py-2 text-center w-[90%] md:w-full leading-tight border-4 border-black transition-all duration-300 ${called ? '' : 'opacity-0 scale-95'}">
-                ${called ? called.nama_lengkap : '-'}
+                ${called ? escapeHTML(called.nama_lengkap) : '-'}
             </div>
             
             <div id="kelas-bg-${bg.id}" class="text-sm md:text-lg font-mono font-bold uppercase bg-white text-black border-4 border-black border-t-0 px-2 md:px-4 py-1 text-center w-[80%] md:w-3/4 leading-tight shadow-[4px_4px_0px_0px_#000] transition-all duration-300 mb-8 ${called ? '' : 'opacity-0 scale-95'}">
-                ${called ? 'KLS: ' + called.kelas : '-'}
+                ${called ? 'KLS: ' + escapeHTML(called.kelas) : '-'}
             </div>
 
             <div id="msg-bg-${bg.id}" class="absolute bottom-12 bg-neoPink border-2 md:border-4 border-black px-4 md:px-6 py-2 md:py-3 shadow-[4px_4px_0px_0px_#000] md:shadow-[6px_6px_0px_0px_#000] text-sm md:text-xl lg:text-2xl font-black uppercase tracking-widest opacity-0 transition-all duration-300 z-20 pointer-events-none transform translate-y-4">
@@ -250,7 +250,7 @@ function renderColumns() {
             </div>
 
             <div class="absolute bottom-0 left-0 w-full bg-neoYellow border-t-4 border-black p-2 md:p-3 text-center text-xs md:text-sm font-bold uppercase flex justify-center items-center gap-2" id="next-bg-${bg.id}">
-                NEXT: ${nextInLine[bg.id] ? `<span class="font-black text-sm md:text-base">${nextInLine[bg.id].nomor_antrian}</span> <span class="truncate max-w-[150px]">(${nextInLine[bg.id].nama_lengkap})</span>` : '-'}
+                NEXT: ${nextInLine[bg.id] ? `<span class="font-black text-sm md:text-base">${escapeHTML(nextInLine[bg.id].nomor_antrian)}</span> <span class="truncate max-w-[150px]">(${escapeHTML(nextInLine[bg.id].nama_lengkap)})</span>` : '-'}
             </div>
         </div>
         `;
@@ -317,6 +317,22 @@ function subscribeToUpdates() {
             })
             .subscribe();
     }
+
+    // Listen repeat_call broadcast dari sekretariat
+    supabaseClient.channel('system-events')
+        .on('broadcast', { event: 'repeat_call' }, (payload) => {
+            const data = payload.payload;
+            if (!data) return;
+
+            // Filter: hanya respons kalau booth cocok (atau broadcast ke semua)
+            if (data.booth_id && currentBoothId && data.booth_id !== currentBoothId) return;
+
+            if (isVoiceEnabled || isAudioEnabled) {
+                const teks = `Nomor antrian ${data.nomor_antrian}, atas nama ${data.nama_lengkap}, harap segera menuju ${data.nama_background}.`;
+                queueAnnouncement(teks, isAudioEnabled);
+            }
+        })
+        .subscribe();
 }
 
 // ============================================
@@ -341,7 +357,7 @@ async function fetchNextInLine(bgId) {
 
     if (data) {
         nextInLine[bgId] = data;
-        nextEl.innerHTML = `NEXT: <span class="font-black text-sm md:text-base">${data.nomor_antrian}</span> <span class="truncate max-w-[200px] xl:max-w-[250px]">(${data.nama_lengkap})</span>`;
+        nextEl.innerHTML = `NEXT: <span class="font-black text-sm md:text-base">${escapeHTML(data.nomor_antrian)}</span> <span class="truncate max-w-[200px] xl:max-w-[250px]">(${escapeHTML(data.nama_lengkap)})</span>`;
     } else {
         nextInLine[bgId] = null;
         nextEl.innerHTML = `NEXT: -`;
@@ -366,8 +382,8 @@ function renderDelayed() {
 
     listContent.innerHTML = uniqueDelayed.map(q =>
         `<div class="border-2 border-black p-1.5 bg-white shadow-[2px_2px_0px_0px_#000] flex flex-col leading-tight">
-            <span class="font-black text-lg tracking-tighter">${q.nomor_antrian}</span>
-            <span class="font-bold text-[0.65rem] uppercase text-gray-700 truncate">${q.nama_lengkap}</span>
+            <span class="font-black text-lg tracking-tighter">${escapeHTML(q.nomor_antrian)}</span>
+            <span class="font-bold text-[0.65rem] uppercase text-gray-700 truncate">${escapeHTML(q.nama_lengkap)}</span>
         </div>`
     ).join('');
 
@@ -396,15 +412,17 @@ function updateColumnUI(bgId, number, isJustCalled, record) {
     }
 
     if (isJustCalled) {
-        if (isAudioEnabled) playNotificationSound();
-
-        // Umumkan via TTS setelah 1 detik (setelah ting-tong selesai)
+        // Ting-tong + voice dimasukkan ke queue secara berurutan
+        // queueAnnouncement(text, withSound=true) = ting-tong dulu, lalu voice
         if (isVoiceEnabled && record) {
-            // Cari nama background dari array global
             const bg = backgrounds.find(b => b.id === record.background_id);
             const namaBg = bg ? bg.nama_background : '';
             const teks = `Nomor antrian ${record.nomor_antrian}, atas nama ${record.nama_lengkap}, harap segera menuju ${namaBg}.`;
-            setTimeout(() => speakAnnouncement(teks), 1000);
+            // withSound=true: ting-tong masuk queue dulu, baru voice
+            queueAnnouncement(teks, isAudioEnabled);
+        } else if (isAudioEnabled) {
+            // Voice dimatikan tapi audio aktif: ting-tong saja
+            playNotificationSound();
         }
 
         cardEl.classList.add('calling-highlight');

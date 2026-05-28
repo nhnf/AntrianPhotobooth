@@ -58,11 +58,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const authResult = await checkAuthWithRole(['admin']);
     if (!authResult) return;
 
-    await Promise.all([loadBooths(), loadBackgrounds()]);
+    // Jalankan semua fetch awal secara paralel untuk mempercepat load
+    await Promise.all([
+        loadBooths(),
+        loadBackgrounds(),
+        fetchAllCustomers(),
+        loadUsers()
+    ]);
+
+    // Render setelah semua data siap
     renderBoothSelector();
     renderBoothManagement();
-    await fetchAllCustomers();
-    await loadUsers();
+    renderCalledPanel(); // backgrounds & allCustomerData sudah siap
     subscribeRealtime();
     systemChannel.subscribe();
 });
@@ -90,6 +97,8 @@ async function loadBackgrounds() {
 
 async function fetchAllCustomers() {
     const tbody = document.getElementById('table-body');
+    const countEl = document.getElementById('table-count');
+    
     if (tbody && allCustomerData.length === 0) {
         tbody.innerHTML = Array(5).fill().map(() => `
             <tr class="border-b-2 border-black/20 bg-white">
@@ -106,6 +115,9 @@ async function fetchAllCustomers() {
                 <td class="p-3"><div class="skeleton h-8 w-8"></div></td>
             </tr>
         `).join('');
+    } else if (countEl) {
+        // BUG-049 FIX: subtle loading indicator untuk subsequent fetch
+        countEl.style.opacity = '0.5';
     }
 
     let query = supabaseClient
@@ -126,7 +138,15 @@ async function fetchAllCustomers() {
     allCustomerData = data || [];
     groupCustomers();
     applyFilters();
-    renderCalledPanel();
+    
+    // BUG-049 FIX: reset loading indicator
+    if (countEl) countEl.style.opacity = '1';
+    
+    // renderCalledPanel hanya kalau backgrounds sudah loaded
+    // (saat init paralel, backgrounds mungkin belum siap)
+    if (backgrounds.length > 0) {
+        renderCalledPanel();
+    }
 }
 
 // ============================================
@@ -299,6 +319,11 @@ function renderCalledPanel() {
                     class="w-full neo-button bg-neoCyan font-black uppercase py-2.5 text-xs border-0 ${waitingList.length === 0 ? 'opacity-40 cursor-not-allowed' : ''}">
                     Panggil Berikutnya
                 </button>
+                ${currentCalled ? `
+                <button onclick="repeatCallSekretariat('${currentCalled.nomor_antrian}', '${(currentCalled.nama_lengkap || '').replace(/'/g, "\\'")}', '${bg.nama_background.replace(/'/g, "\\'")}', ${bg.id})"
+                    class="w-full neo-button bg-neoYellow font-black uppercase py-2 text-xs border-0 border-t-2 border-black hover:bg-black hover:text-neoYellow transition-colors">
+                    🔔 Panggil Lagi
+                </button>` : ''}
                 <div class="grid grid-cols-3 border-t-4 border-black">
                     <button onclick="markCurrentAsSekretariat('${STATUS.SELESAI}', ${bg.id})" ${!currentCalled ? 'disabled' : ''}
                         class="bg-neoGreen font-bold uppercase py-2 text-[10px] border-r-2 border-black hover:bg-black hover:text-neoGreen transition-colors ${!currentCalled ? 'opacity-40 cursor-not-allowed' : ''}">Selesai</button>
@@ -413,6 +438,40 @@ async function returnToQueueSekretariat(nomor_antrian) {
     if (error) showPopup('Error', 'Gagal mengembalikan antrian: ' + error.message, true);
 }
 
+// ============================================
+// Repeat Call (Panggil Lagi)
+// ============================================
+async function repeatCallSekretariat(nomorAntrian, namaLengkap, namaBg, bgId) {
+    const btn = event.currentTarget;
+    const origText = btn.innerHTML;
+    btn.innerHTML = '⏳ Memanggil...';
+    btn.disabled = true;
+
+    try {
+        // Broadcast ke monitor via system channel agar ting-tong + voice berbunyi lagi
+        await systemChannel.send({
+            type: 'broadcast',
+            event: 'repeat_call',
+            payload: {
+                nomor_antrian: nomorAntrian,
+                nama_lengkap: namaLengkap,
+                nama_background: namaBg,
+                bg_id: bgId,
+                booth_id: currentBoothFilter !== 'all' ? parseInt(currentBoothFilter) : null
+            }
+        });
+
+        showPopup('Berhasil', `🔔 Memanggil ulang <b>${nomorAntrian}</b> — ${namaLengkap}`);
+    } catch (e) {
+        showPopup('Error', 'Gagal mengirim panggilan ulang: ' + e.message, true);
+    } finally {
+        setTimeout(() => {
+            btn.innerHTML = origText;
+            btn.disabled = false;
+        }, 2000);
+    }
+}
+
 async function callNextSekretariat(bgId) {
     // Pastikan booth sudah difilter jika diperlukan
     const bgQueues = allCustomerData.filter(q => q.background_id === bgId && (currentBoothFilter === 'all' || q.booth_id === parseInt(currentBoothFilter)));
@@ -482,10 +541,10 @@ function renderStatsCards() {
         const matchLebih = paymentNote.match(/Kelebihan bayar:\s*Rp\s*([\d.,]+)/);
         
         if (matchKurang) {
-            kurangBayar = parseInt(matchKurang[1].replace(/[.,]/g, '')) || 0;
+            kurangBayar = parseRupiah(matchKurang[0]);
         }
         if (matchLebih) {
-            kelebihanBayar = parseInt(matchLebih[1].replace(/[.,]/g, '')) || 0;
+            kelebihanBayar = parseRupiah(matchLebih[0]);
         }
         
         if (c.payment_status === 'lunas') {
@@ -663,7 +722,7 @@ function renderCustomerTable() {
                 item.status === STATUS.DIPANGGIL ? '📢' :
                     item.status === STATUS.BATAL ? '❌' :
                         item.status === STATUS.DITUNDA ? '⏸️' : '⏳';
-            return `${statusIcon} ${item.background} (${item.qty}x)`;
+            return `${statusIcon} ${escapeHTML(item.background)} (${item.qty}x)`;
         });
         if (c.totalPigura > 0) purchaseLines.push(`🖼️ Pigura (${c.totalPigura}x)`);
         
@@ -705,18 +764,18 @@ function renderCustomerTable() {
         <tr class="table-row border-b-2 border-black/20 ${rowClass}">
             <td class="p-3 font-mono font-bold text-sm text-center">${i + 1}</td>
             <td class="p-3">
-                <div class="font-black text-lg tracking-tight">${c.nomor_antrian}</div>
+                <div class="font-black text-lg tracking-tight">${escapeHTML(c.nomor_antrian)}</div>
                 <div class="font-mono text-[10px] text-gray-500">${formatTime(c.created_at)}</div>
             </td>
             <td class="p-3">
-                <span class="font-mono text-xs font-bold bg-bgLight border-2 border-black px-2 py-0.5">${booth?.nama_booth || '-'}</span>
+                <span class="font-mono text-xs font-bold bg-bgLight border-2 border-black px-2 py-0.5">${escapeHTML(booth?.nama_booth || '-')}</span>
             </td>
             <td class="p-3 font-bold uppercase text-sm">
-                <div>${c.nama_lengkap}</div>
-                ${c.no_wa ? `<a href="https://wa.me/${c.no_wa.startsWith('0') ? '62' + c.no_wa.substring(1) : c.no_wa}" target="_blank" class="inline-block mt-1 text-xs bg-[#25D366] border-2 border-black text-white px-2 py-0.5 shadow-[2px_2px_0px_0px_#000] hover:translate-y-[1px] hover:shadow-[1px_1px_0px_0px_#000] transition-all"><span class="font-mono font-bold">💬 WA</span></a>` : ''}
+                <div>${escapeHTML(c.nama_lengkap)}</div>
+                ${c.no_wa ? `<a href="https://wa.me/${escapeAttr(c.no_wa.startsWith('0') ? '62' + c.no_wa.substring(1) : c.no_wa)}" target="_blank" class="inline-block mt-1 text-xs bg-[#25D366] border-2 border-black text-white px-2 py-0.5 shadow-[2px_2px_0px_0px_#000] hover:translate-y-[1px] hover:shadow-[1px_1px_0px_0px_#000] transition-all"><span class="font-mono font-bold">💬 WA</span></a>` : ''}
             </td>
-            <td class="p-3 font-mono font-bold text-sm">${c.kelas}</td>
-            <td class="p-3 font-bold text-sm text-gray-700">${c.alamat}</td>
+            <td class="p-3 font-mono font-bold text-sm">${escapeHTML(c.kelas)}</td>
+            <td class="p-3 font-bold text-sm text-gray-700">${escapeHTML(c.alamat)}</td>
             <td class="p-3">
                 <div class="text-xs font-bold space-y-0.5">${purchaseLines.map(l => `<div>${l}</div>`).join('')}</div>
             </td>
@@ -726,31 +785,31 @@ function renderCustomerTable() {
                 ${paymentDiffBadge}
             </td>
             <td class="p-3 text-center">
-                <button onclick="togglePaymentMethod('${c.nomor_antrian}')" class="mb-1 transition-transform hover:scale-105 active:scale-95 cursor-pointer block w-full">
+                <button onclick="togglePaymentMethod('${escapeAttr(c.nomor_antrian)}')" class="mb-1 transition-transform hover:scale-105 active:scale-95 cursor-pointer block w-full">
                 ${c.payment_method === 'online' ? '<div class="text-[10px] font-black uppercase text-neoCyan bg-black px-1 py-0.5 border-2 border-transparent hover:border-neoCyan">💳 ONLINE</div>' : 
                   c.payment_method === 'tunai' ? '<div class="text-[10px] font-black uppercase text-black bg-neoYellow border-2 border-black px-1 py-0.5 hover:bg-black hover:text-neoYellow">💵 TUNAI</div>' : 
                   '<div class="text-[10px] font-black uppercase text-black bg-gray-200 border-2 border-black px-1 py-0.5 hover:bg-black hover:text-white">➖ KOSONG</div>'}
                 </button>
-                <button onclick="togglePayment('${c.nomor_antrian}')"
+                <button onclick="togglePayment('${escapeAttr(c.nomor_antrian)}')"
                     class="payment-badge inline-block px-3 py-2 font-black text-xs uppercase border-3 border-black shadow-[2px_2px_0px_0px_#000] ${isLunas ? 'bg-neoGreen' : 'bg-neoRed'} w-full mb-1">
                     ${isLunas ? '✅ LUNAS' : '❌ BELUM'}
                 </button>
                 ${allFinished ? `
-                <button onclick="togglePickupStatus('${c.nomor_antrian}')"
+                <button onclick="togglePickupStatus('${escapeAttr(c.nomor_antrian)}')"
                     class="payment-badge inline-block px-3 py-2 font-black text-xs uppercase border-3 border-black shadow-[2px_2px_0px_0px_#000] ${c.picked_up ? 'bg-neoCyan' : 'bg-white'} w-full">
                     ${c.picked_up ? '📦 DIAMBIL' : '📦 BELUM'}
                 </button>
                 ` : ''}
             </td>
             <td class="p-3">
-                <input type="text" value="${escapeHTML(parsedNotes.manual)}" placeholder="..."
+                <input type="text" value="${escapeAttr(parsedNotes.manual)}" placeholder="..."
                     class="notes-input w-full border-2 border-black/30 px-2 py-1 text-xs font-bold focus:outline-none focus:border-black bg-transparent min-w-[100px]"
-                    onchange="saveNotes('${c.nomor_antrian}', this.value)"
+                    onchange="saveNotes('${escapeAttr(c.nomor_antrian)}', this.value)"
                     onfocus="this.classList.add('border-black', 'bg-white')"
                     onblur="this.classList.remove('border-black', 'bg-white')">
             </td>
             <td class="p-3 text-center">
-                <button onclick="openEditModal('${c.nomor_antrian}')"
+                <button onclick="openEditModal('${escapeAttr(c.nomor_antrian)}')"
                     class="neo-button bg-neoCyan font-bold uppercase py-1.5 px-3 text-xs">✏️ Edit</button>
             </td>
         </tr>`;
@@ -768,9 +827,20 @@ async function togglePayment(nomorAntrian) {
     const statusText = newStatus === 'lunas' ? 'LUNAS' : 'BELUM LUNAS';
 
     showConfirm('Ubah Status Pembayaran', `Ubah status pembayaran <b>${nomorAntrian}</b> menjadi <b>${statusText}</b>?`, 'UBAH', async () => {
+        const updatePayload = { payment_status: newStatus };
+
+        // BUG-005 FIX: Saat toggle ke LUNAS, clear payment note (kurang/lebih bayar)
+        // tapi preserve manual notes
+        if (newStatus === 'lunas') {
+            const parsed = parseNotes(customer.notes);
+            if (parsed.payment) {
+                updatePayload.notes = combineNotes(parsed.manual, '');
+            }
+        }
+
         const { error } = await supabaseClient
             .from('queues')
-            .update({ payment_status: newStatus })
+            .update(updatePayload)
             .eq('nomor_antrian', nomorAntrian);
 
         if (error) {
@@ -780,8 +850,12 @@ async function togglePayment(nomorAntrian) {
 
         // Update local data
         customer.payment_status = newStatus;
+        if (updatePayload.notes !== undefined) customer.notes = updatePayload.notes;
         allCustomerData.forEach(row => {
-            if (row.nomor_antrian === nomorAntrian) row.payment_status = newStatus;
+            if (row.nomor_antrian === nomorAntrian) {
+                row.payment_status = newStatus;
+                if (updatePayload.notes !== undefined) row.notes = updatePayload.notes;
+            }
         });
 
         applyFilters();
@@ -819,8 +893,8 @@ async function togglePaymentMethod(nomorAntrian) {
 
         applyFilters();
     });
-
-    applyFilters();
+    // BUG-031 FIX: dihilangkan applyFilters() yang dipanggil di luar callback
+    // (sebelumnya jalan meskipun user batal di confirm dialog)
 }
 
 // ============================================
@@ -834,10 +908,11 @@ async function togglePickupStatus(nomorAntrian) {
     const statusText = newStatus ? 'SUDAH DIAMBIL' : 'BELUM DIAMBIL';
 
     showConfirm('Ubah Status Pengambilan', `Ubah status pengambilan tiket <b>${nomorAntrian}</b> menjadi <b>${statusText}</b>?`, 'UBAH', async () => {
-        const { error } = await supabaseClient
-            .from('queues')
-            .update({ picked_up: newStatus })
-            .eq('nomor_antrian', nomorAntrian);
+        // BUG-030 RLS hardening: pakai RPC instead of direct UPDATE
+        const { error } = await supabaseClient.rpc('pengambilan_set_pickup', {
+            p_nomor_antrian: nomorAntrian,
+            p_picked_up: newStatus
+        });
 
         if (error) {
             showPopup('Error', 'Gagal mengubah status pengambilan: ' + error.message, true);
@@ -922,15 +997,28 @@ async function resolvePaymentDiff(nomorAntrian, type) {
 
 // ============================================
 // Notes inline save (preserves auto payment notes)
+// BUG-007 FIX: re-fetch payment notes dari DB sebelum combine,
+// mencegah resurrect stale payment note dari local cache
 // ============================================
 async function saveNotes(nomorAntrian, manualNotes) {
     const trimmed = (manualNotes || '').trim();
 
-    // Cari customer dan ambil payment note yang ada
-    const customer = groupedCustomers.find(c => c.nomor_antrian === nomorAntrian);
-    const existingPayment = customer ? parseNotes(customer.notes).payment : '';
+    // Re-fetch payment notes terkini dari DB (race-safe)
+    const { data: fresh, error: fetchErr } = await supabaseClient
+        .from('queues')
+        .select('notes')
+        .eq('nomor_antrian', nomorAntrian)
+        .limit(1)
+        .single();
 
-    // Gabungkan manual notes baru dengan payment notes yang sudah ada
+    if (fetchErr) {
+        showPopup('Error', 'Gagal membaca catatan: ' + fetchErr.message, true);
+        return;
+    }
+
+    const existingPayment = parseNotes(fresh?.notes || '').payment;
+
+    // Gabungkan manual notes baru dengan payment notes terkini dari DB
     const combined = combineNotes(trimmed, existingPayment);
 
     const { error } = await supabaseClient
@@ -944,6 +1032,7 @@ async function saveNotes(nomorAntrian, manualNotes) {
     }
 
     // Update local
+    const customer = groupedCustomers.find(c => c.nomor_antrian === nomorAntrian);
     if (customer) customer.notes = combined;
     allCustomerData.forEach(row => {
         if (row.nomor_antrian === nomorAntrian) row.notes = combined;
@@ -1041,9 +1130,20 @@ async function saveCustomerEdit() {
     const wa = document.getElementById('edit-wa').value.trim();
     const manualNotes = document.getElementById('edit-notes').value.trim();
 
-    // Preserve auto payment notes (kurang/kelebihan bayar)
-    const customer = groupedCustomers.find(c => c.nomor_antrian === nomorAntrian);
-    const existingPayment = customer ? parseNotes(customer.notes).payment : '';
+    // BUG-007 FIX: re-fetch payment notes dari DB (race-safe), bukan dari cache
+    const { data: fresh, error: fetchErr } = await supabaseClient
+        .from('queues')
+        .select('notes')
+        .eq('nomor_antrian', nomorAntrian)
+        .limit(1)
+        .single();
+    
+    if (fetchErr) {
+        showPopup('Error', 'Gagal membaca data: ' + fetchErr.message, true);
+        return;
+    }
+    
+    const existingPayment = parseNotes(fresh?.notes || '').payment;
     const notes = combineNotes(manualNotes, existingPayment);
 
     if (!nama) {
@@ -1087,28 +1187,60 @@ async function saveCustomerEdit() {
 // ============================================
 // Realtime Subscription
 // ============================================
+let realtimeQueueChannel = null;
+let realtimeBoothChannel = null;
+let realtimeRefetchTimer = null;
+let pendingNotesEdits = {}; // BUG-027 FIX: track notes input yang sedang aktif diketik
+
 function subscribeRealtime() {
-    // Subscribe to queue changes
-    supabaseClient.channel('sekretariat-queues')
+    // BUG-013 FIX: cleanup channel lama sebelum subscribe baru
+    if (realtimeQueueChannel) {
+        supabaseClient.removeChannel(realtimeQueueChannel);
+    }
+    if (realtimeBoothChannel) {
+        supabaseClient.removeChannel(realtimeBoothChannel);
+    }
+    
+    // Subscribe to queue changes (debounced)
+    realtimeQueueChannel = supabaseClient.channel('sekretariat-queues')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'queues' }, () => {
-            fetchAllCustomers();
+            // BUG-027 FIX: debounce + skip kalau user lagi ngetik notes
+            if (realtimeRefetchTimer) clearTimeout(realtimeRefetchTimer);
+            realtimeRefetchTimer = setTimeout(() => {
+                // Skip refetch kalau ada notes input yang sedang focus
+                const activeEl = document.activeElement;
+                if (activeEl && activeEl.classList.contains('notes-input')) {
+                    // Reschedule check setiap 2 detik sampai user blur
+                    realtimeRefetchTimer = setTimeout(() => {
+                        if (!document.activeElement?.classList.contains('notes-input')) {
+                            fetchAllCustomers();
+                        }
+                    }, 2000);
+                    return;
+                }
+                fetchAllCustomers();
+            }, 300);
         })
         .subscribe();
     
     // Subscribe to booth changes (quota counter, config updates)
-    supabaseClient.channel('sekretariat-booths')
+    realtimeBoothChannel = supabaseClient.channel('sekretariat-booths')
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'booths' }, (payload) => {
             // Update booth info in local state
             const booth = allBooths.find(b => b.id === payload.new.id);
             if (booth) {
-                // Update all booth properties
                 Object.assign(booth, payload.new);
-                // Re-render booth management panel to show updated quota
                 renderBoothManagement();
             }
         })
         .subscribe();
 }
+
+// BUG-013 FIX: cleanup pada unload
+window.addEventListener('beforeunload', () => {
+    if (realtimeQueueChannel) supabaseClient.removeChannel(realtimeQueueChannel);
+    if (realtimeBoothChannel) supabaseClient.removeChannel(realtimeBoothChannel);
+});
 
 // ============================================
 // Export CSV
@@ -1234,12 +1366,7 @@ function downloadPDF() {
 // ============================================
 // Utility
 // ============================================
-function escapeHTML(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
+// escapeHTML() & escapeAttr() sekarang global di shared/config.js (BUG-018/019 FIX)
 
 // ============================================
 // Booth Management UI
@@ -1584,9 +1711,11 @@ function downloadQRCodeImage(boothName) {
 // ============================================
 async function broadcastClearCache() {
     if (currentBoothFilter === 'all') return showPopup('Error', 'Pilih booth spesifik terlebih dahulu untuk melakukan wipe cache.', true);
+    const boothId = parseInt(currentBoothFilter);
     showConfirm('Wipe Cache', '⚠️ Tombol ini akan menghapus paksa cache tiket di SEMUA HP pelanggan booth ini. Lanjutkan?',
         'YA, WIPE', async () => {
-            await systemChannel.send({ type: 'broadcast', event: 'clear_cache', payload: { action: 'wipe' } });
+            // BUG-035 FIX: kirim boothId agar customer hanya respons untuk booth-nya
+            await systemChannel.send({ type: 'broadcast', event: 'clear_cache', payload: { action: 'wipe', boothId } });
             showPopup('Sukses', '✅ Sinyal pembersihan cache telah disebarkan!');
         });
 }
@@ -1603,7 +1732,7 @@ function resetAllQueues() {
                 if (rows && rows.length > 0) {
                     await supabaseClient.from('queues').delete().in('id', rows.map(r => r.id));
                 }
-                await systemChannel.send({ type: 'broadcast', event: 'clear_cache', payload: { action: 'wipe' } });
+                await systemChannel.send({ type: 'broadcast', event: 'clear_cache', payload: { action: 'wipe', boothId } });
                 showPopup('Sukses', '✅ Semua antrian booth ini dihapus!');
                 fetchAllCustomers();
             } catch (e) { showPopup('Error', 'Gagal reset: ' + e.message, true); }
@@ -1660,8 +1789,14 @@ let allUsers = [];
 let allBoothAccess = [];
 
 async function loadUsers() {
-    const { data: users, error: errUsers } = await supabaseClient.from('user_profiles').select('*').order('created_at');
-    const { data: access, error: errAccess } = await supabaseClient.from('user_booth_access').select('*');
+    // Parallelkan 2 query sekaligus
+    const [
+        { data: users, error: errUsers },
+        { data: access, error: errAccess }
+    ] = await Promise.all([
+        supabaseClient.from('user_profiles').select('*').order('created_at'),
+        supabaseClient.from('user_booth_access').select('*')
+    ]);
     
     if (!errUsers && users) allUsers = users;
     if (!errAccess && access) allBoothAccess = access;

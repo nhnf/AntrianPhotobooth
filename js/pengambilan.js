@@ -291,14 +291,14 @@ function renderCustomerTable() {
             <td class="p-3">
                 <span class="font-mono text-xs font-bold bg-bgLight border-2 border-black px-2 py-0.5">${booth?.nama_booth || '-'}</span>
             </td>
-            <td class="p-3 font-bold uppercase text-sm">${c.nama_lengkap}</td>
-            <td class="p-3 font-mono font-bold text-sm">${c.kelas}</td>
-            <td class="p-3 font-bold text-xs uppercase">${c.alamat}</td>
+            <td class="p-3 font-bold uppercase text-sm">${escapeHTML(c.nama_lengkap)}</td>
+            <td class="p-3 font-mono font-bold text-sm">${escapeHTML(c.kelas)}</td>
+            <td class="p-3 font-bold text-xs uppercase">${escapeHTML(c.alamat)}</td>
             <td class="p-3">
                 ${c.no_wa ? `
                 <div class="flex flex-col gap-1 items-start">
-                    <span class="font-mono font-bold text-xs">${c.no_wa}</span>
-                    <a href="https://wa.me/${c.no_wa.startsWith('0') ? '62' + c.no_wa.substring(1) : c.no_wa}" target="_blank" class="inline-block text-[10px] bg-[#25D366] border-2 border-black text-white px-2 py-0.5 shadow-[2px_2px_0px_0px_#000] hover:translate-y-[1px] hover:shadow-[1px_1px_0px_0px_#000] transition-all">
+                    <span class="font-mono font-bold text-xs">${escapeHTML(c.no_wa)}</span>
+                    <a href="https://wa.me/${escapeAttr(c.no_wa.startsWith('0') ? '62' + c.no_wa.substring(1) : c.no_wa)}" target="_blank" class="inline-block text-[10px] bg-[#25D366] border-2 border-black text-white px-2 py-0.5 shadow-[2px_2px_0px_0px_#000] hover:translate-y-[1px] hover:shadow-[1px_1px_0px_0px_#000] transition-all">
                         <span class="font-mono font-bold">💬 Kirim WA</span>
                     </a>
                 </div>
@@ -360,11 +360,11 @@ async function togglePickup(nomorAntrian, isPickedUp) {
 }
 
 async function executePickupUpdate(nomorAntrian, newStatus) {
-    // Update ALL rows for this customer to have picked_up = newStatus
-    const { error } = await supabaseClient
-        .from('queues')
-        .update({ picked_up: newStatus })
-        .eq('nomor_antrian', nomorAntrian);
+    // BUG-030 RLS hardening: pakai RPC instead of direct UPDATE
+    const { error } = await supabaseClient.rpc('pengambilan_set_pickup', {
+        p_nomor_antrian: nomorAntrian,
+        p_picked_up: newStatus
+    });
 
     if (error) {
         showPopup('Error', 'Gagal update status: ' + error.message, true);

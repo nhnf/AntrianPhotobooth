@@ -55,8 +55,9 @@
                     document.getElementById('status-title').className = 'text-3xl font-black uppercase tracking-tight mb-4 text-neoGreen';
                     document.getElementById('status-message').textContent = 'Terima kasih! Tiket Anda telah lunas dan segera diproses.';
                     
-                    // Supabase webhook should update the DB, but we can also update it here as fallback
-                    await supabaseClient.from('queues').update({ payment_status: 'lunas' }).eq('nomor_antrian', orderId);
+                    // BUG-008 FIX: jangan update DB dari client (bypass webhook signature)
+                    // Webhook adalah authoritative source. Kalau DB belum sync, akan
+                    // sync sendiri dalam beberapa detik via webhook + realtime subscription.
                 } else if (data.data.status === 'pending') {
                     document.getElementById('status-title').textContent = '⏳ MENUNGGU PEMBAYARAN';
                     document.getElementById('status-title').className = 'text-3xl font-black uppercase tracking-tight mb-4 text-neoYellow';
@@ -64,9 +65,9 @@
                 } else {
                     document.getElementById('status-title').textContent = '❌ PEMBAYARAN GAGAL';
                     document.getElementById('status-title').className = 'text-3xl font-black uppercase tracking-tight mb-4 text-neoRed';
-                    document.getElementById('status-message').textContent = 'Pembayaran dibatalkan atau kadaluarsa. Silakan bayar tunai di kasir.';
-                    // Fallback to tunai if expired
-                    await supabaseClient.from('queues').update({ payment_method: 'tunai', payment_channel: null }).eq('nomor_antrian', orderId);
+                    document.getElementById('status-message').textContent = 'Pembayaran dibatalkan atau kadaluarsa. Silakan kembali ke tiket dan coba bayar tunai atau ulangi pembayaran online.';
+                    // BUG-008 FIX: tidak auto-fallback ke tunai dari client.
+                    // Customer harus manual ganti via tombol di tiket page.
                 }
             } catch (err) {
                 console.error(err);

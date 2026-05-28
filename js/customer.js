@@ -8,9 +8,35 @@ let piguraQty = 0;
 
 let myQueueId = null;
 let myTicketStatuses = {};
+// BUG-024 FIX: BroadcastChannel untuk sync state antar tab customer
+// Saat user edit/submit di tab A, tab B otomatis reload state.
+const customerTabChannel = (typeof BroadcastChannel !== 'undefined')
+    ? new BroadcastChannel('customer-tabs')
+    : null;
+
+if (customerTabChannel) {
+    customerTabChannel.addEventListener('message', (e) => {
+        if (e.data && e.data.type === 'queue_changed') {
+            // Tab lain submit/edit/cancel → kalau queue sama, reload
+            if (e.data.nomor_antrian === myQueueId) {
+                location.reload();
+            }
+        }
+    });
+}
+
+function broadcastQueueChange(nomorAntrian) {
+    if (customerTabChannel) {
+        customerTabChannel.postMessage({ type: 'queue_changed', nomor_antrian: nomorAntrian });
+    }
+}
+
 let realtimeChannel = null;
 let allWaitingQueues = [];
 let notifiedStates = {};
+// BUG-010 FIX: skip notification untuk N detik pertama setelah load (mencegah misfire saat restore)
+const NOTIFICATION_GRACE_MS = 3000;
+const notificationGraceUntil = Date.now() + NOTIFICATION_GRACE_MS;
 let isEditMode = false;
 let originalQueueId = null;
 
@@ -66,6 +92,12 @@ function requestNotificationPermission() {
 // ============================================
 function applyBoothUI(booth) {
     if (!booth) return;
+    
+    // BUG-023 FIX: Save prefix ke localStorage agar lacakTiket bisa pakai
+    if (booth.ticket_prefix) {
+        localStorage.setItem('customerTicketPrefix', booth.ticket_prefix);
+    }
+    
     // Update prefix indicator
     const indicator = document.getElementById('prefix-indicator');
     if (indicator) indicator.textContent = 'KODE: ' + booth.ticket_prefix;
@@ -231,10 +263,20 @@ async function validateBoothAccess(boothId) {
 // System Channel (Admin commands — clear cache)
 // ============================================
 let systemChannel;
+// BUG-033 FIX: track booth-sync channel agar tidak ada duplicate subscription
+let boothSyncChannel = null;
+
 function initSystemChannel() {
     systemChannel = supabaseClient.channel('system-events');
 
     systemChannel.on('broadcast', { event: 'clear_cache' }, (payload) => {
+        // BUG-035 FIX: filter by booth_id agar customer cuma respons untuk booth-nya
+        // payload.boothId === undefined berarti broadcast ke semua (legacy)
+        const targetBoothId = payload.payload?.boothId;
+        if (targetBoothId !== undefined && currentBoothId && targetBoothId !== currentBoothId) {
+            return; // bukan booth ini, skip
+        }
+        
         if (payload.payload.action === 'wipe') {
             const savedKey = 'myQueueId_booth_' + (currentBoothId || 'default');
             localStorage.removeItem(savedKey);
@@ -246,7 +288,11 @@ function initSystemChannel() {
 
     // Listen perubahan booth prefix secara realtime
     if (currentBoothId) {
-        supabaseClient.channel('booth-sync-' + currentBoothId)
+        // BUG-033 FIX: cleanup channel lama sebelum subscribe baru
+        if (boothSyncChannel) {
+            supabaseClient.removeChannel(boothSyncChannel);
+        }
+        boothSyncChannel = supabaseClient.channel('booth-sync-' + currentBoothId)
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'booths',
                 filter: 'id=eq.' + currentBoothId }, async (payload) => {
                 // Reload info booth jika prefix/nama/quota berubah
@@ -260,6 +306,13 @@ function initSystemChannel() {
 
     systemChannel.subscribe();
 }
+
+// BUG-034 FIX: cleanup semua channel saat tab close
+window.addEventListener('beforeunload', () => {
+    if (realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
+    if (systemChannel) supabaseClient.removeChannel(systemChannel);
+    if (boothSyncChannel) supabaseClient.removeChannel(boothSyncChannel);
+});
 
 // Initialize system channel
 initSystemChannel();
@@ -303,11 +356,11 @@ async function loadBackgrounds() {
             const imgPath = `assets/bg${idx + 1}.jpeg`;
             return `
             <div class="bg-white ${color} border-2 border-black p-2 sm:p-3 flex flex-row items-center gap-2 sm:gap-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 transition-all">
-                <div class="w-14 h-14 sm:w-20 sm:h-20 shrink-0 border-2 border-black bg-gray-200 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity" onclick="openPreview('${imgPath}', '${bg.nama_background}')" title="Klik untuk perbesar">
-                    <img src="${imgPath}" alt="${bg.nama_background}" class="w-full h-full object-cover" onerror="this.parentElement.style.display='none'">
+                <div class="w-14 h-14 sm:w-20 sm:h-20 shrink-0 border-2 border-black bg-gray-200 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity" onclick="openPreview('${escapeAttr(imgPath)}', '${escapeAttr(bg.nama_background)}')" title="Klik untuk perbesar">
+                    <img src="${escapeAttr(imgPath)}" alt="${escapeAttr(bg.nama_background)}" class="w-full h-full object-cover" onerror="this.parentElement.style.display='none'">
                 </div>
                 <div class="text-left flex-1 min-w-0">
-                    <h3 class="text-sm sm:text-lg font-black uppercase tracking-tight leading-tight">${bg.nama_background}</h3>
+                    <h3 class="text-sm sm:text-lg font-black uppercase tracking-tight leading-tight">${escapeHTML(bg.nama_background)}</h3>
                     <p class="font-mono text-[10px] sm:text-xs font-bold text-gray-800 mt-0.5 sm:mt-1 whitespace-nowrap">${formatCurrency(HARGA_PER_FOTO)}/ft</p>
                 </div>
                 <div class="flex items-center bg-white border-2 border-black rounded-full overflow-hidden shrink-0">
@@ -449,6 +502,8 @@ function combineNotesParts(manual, payment) {
     return manual + PAYMENT_NOTE_DELIM + payment;
 }
 
+// safeParseInt() & parseRupiah() sekarang global di shared/config.js
+
 /**
  * Hitung selisih harga antara pesanan lama dan baru
  * Juga mengembalikan manual notes yang harus di-preserve
@@ -474,7 +529,9 @@ async function calculatePriceDifference() {
             needsPayment: true,
             needsRefund: false,
             wasLunas: false,
-            manualNotes: ''
+            manualNotes: '',
+            paidAmount: 0,
+            oldPaymentNote: ''
         };
     }
     
@@ -486,7 +543,27 @@ async function calculatePriceDifference() {
     const wasLunas = oldData[0].payment_status === 'lunas';
     const needsPayment = wasLunas && difference > 0;
     const needsRefund = wasLunas && difference < 0;
-    const manualNotes = parseNotesParts(oldData[0].notes).manual;
+    
+    const oldNotesParsed = parseNotesParts(oldData[0].notes);
+    const manualNotes = oldNotesParsed.manual;
+    const oldPaymentNote = oldNotesParsed.payment;
+    
+    // BUG-002 FIX: Hitung berapa yang sudah dibayar
+    // - Lunas tanpa note → paid = oldTotal (full)
+    // - Lunas + Kelebihan bayar X → paid = oldTotal + X (overpaid)
+    // - Belum lunas + Kurang bayar X → paid = oldTotal - X (partial)
+    // - Belum lunas tanpa note → paid = 0
+    let paidAmount = 0;
+    if (wasLunas) {
+        const lebih = parseRupiah(oldPaymentNote.match(/Kelebihan bayar:\s*(Rp\s*[\d.,]+)/)?.[1] || '');
+        paidAmount = oldTotal + lebih;
+    } else {
+        const kurang = parseRupiah(oldPaymentNote.match(/Kurang bayar:\s*(Rp\s*[\d.,]+)/)?.[1] || '');
+        if (kurang > 0) {
+            paidAmount = Math.max(0, oldTotal - kurang);
+        }
+        // else: paidAmount = 0 (belum bayar sama sekali)
+    }
     
     return { 
         oldTotal, 
@@ -495,7 +572,9 @@ async function calculatePriceDifference() {
         needsPayment,
         needsRefund,
         wasLunas,
-        manualNotes
+        manualNotes,
+        paidAmount,
+        oldPaymentNote
     };
 }
 
@@ -503,8 +582,32 @@ async function calculatePriceDifference() {
 // Submit Queue
 // ============================================
 let pendingQueueData = null;
+let isSubmitting = false; // BUG-021 FIX: prevent double-submit
 
 async function submitQueue() {
+    // BUG-021 FIX: Guard double-submit
+    if (isSubmitting) return;
+    
+    const submitBtn = document.getElementById('btn-submit-queue');
+    isSubmitting = true;
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.dataset.origText = submitBtn.textContent;
+        submitBtn.textContent = '⏳ MEMPROSES...';
+    }
+    
+    try {
+        await _submitQueueInner();
+    } finally {
+        isSubmitting = false;
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = submitBtn.dataset.origText || (isEditMode ? 'SIMPAN PERUBAHAN' : 'AMBIL TIKET');
+        }
+    }
+}
+
+async function _submitQueueInner() {
     const nama = sanitizeInput(document.getElementById('input-nama').value);
     const kelas = sanitizeInput(document.getElementById('input-kelas').value);
     const alamat = sanitizeInput(document.getElementById('input-alamat').value);
@@ -541,26 +644,37 @@ async function submitQueue() {
 
     pendingQueueData = { nama, kelas, alamat, noWa, selectedBgs };
 
-    // KONFIRMASI KHUSUS untuk edit pesanan yang sudah lunas dengan perubahan harga
+    // KONFIRMASI KHUSUS untuk edit pesanan dengan perubahan balance pembayaran
     if (isEditMode) {
         const priceInfo = await calculatePriceDifference();
         
-        if (priceInfo.wasLunas && priceInfo.difference !== 0) {
+        // Hitung balance saat ini berdasarkan paidAmount
+        const balance = priceInfo.newTotal - priceInfo.paidAmount;
+        const oldBalance = priceInfo.oldTotal - priceInfo.paidAmount;
+        const balanceChanged = balance !== oldBalance;
+        
+        if (balanceChanged && priceInfo.paidAmount > 0) {
             let confirmMessage = '';
             let confirmTitle = '';
             
-            if (priceInfo.needsPayment) {
-                // Harga naik - perlu bayar tambahan
+            if (balance > 0) {
+                // Masih kurang bayar setelah edit
                 confirmTitle = '⚠️ Perubahan Harga';
-                confirmMessage = `Harga pesanan akan naik dari <b>${formatCurrency(priceInfo.oldTotal)}</b> menjadi <b>${formatCurrency(priceInfo.newTotal)}</b>.<br><br>` +
-                    `Anda perlu membayar tambahan sebesar <b>${formatCurrency(priceInfo.difference)}</b>.<br><br>` +
-                    `Lanjutkan?`;
-            } else if (priceInfo.needsRefund) {
-                // Harga turun - ada kelebihan bayar
+                confirmMessage = `Total pesanan: <b>${formatCurrency(priceInfo.oldTotal)}</b> → <b>${formatCurrency(priceInfo.newTotal)}</b><br>` +
+                    `Sudah dibayar: <b>${formatCurrency(priceInfo.paidAmount)}</b><br><br>` +
+                    `Anda perlu membayar tambahan sebesar <b>${formatCurrency(balance)}</b>.<br><br>Lanjutkan?`;
+            } else if (balance < 0) {
+                // Kelebihan bayar
                 confirmTitle = '💰 Perubahan Harga';
-                confirmMessage = `Harga pesanan akan turun dari <b>${formatCurrency(priceInfo.oldTotal)}</b> menjadi <b>${formatCurrency(priceInfo.newTotal)}</b>.<br><br>` +
-                    `Kelebihan bayar sebesar <b>${formatCurrency(Math.abs(priceInfo.difference))}</b> akan dikembalikan.<br><br>` +
-                    `Lanjutkan?`;
+                confirmMessage = `Total pesanan: <b>${formatCurrency(priceInfo.oldTotal)}</b> → <b>${formatCurrency(priceInfo.newTotal)}</b><br>` +
+                    `Sudah dibayar: <b>${formatCurrency(priceInfo.paidAmount)}</b><br><br>` +
+                    `Kelebihan bayar sebesar <b>${formatCurrency(-balance)}</b> akan dikembalikan.<br><br>Lanjutkan?`;
+            } else {
+                // Pas - status lunas
+                confirmTitle = '✅ Perubahan Harga';
+                confirmMessage = `Total pesanan: <b>${formatCurrency(priceInfo.oldTotal)}</b> → <b>${formatCurrency(priceInfo.newTotal)}</b><br>` +
+                    `Sudah dibayar: <b>${formatCurrency(priceInfo.paidAmount)}</b><br><br>` +
+                    `Pembayaran <b>pas</b>, status akan jadi LUNAS.<br><br>Lanjutkan?`;
             }
             
             showConfirm(confirmTitle, confirmMessage, 'YA, LANJUTKAN', async () => {
@@ -593,7 +707,6 @@ async function executeSubmitQueue(paymentMethod, paymentChannel) {
         let priceInfoBeforeUpdate = null;
         if (isEditMode) {
             priceInfoBeforeUpdate = await calculatePriceDifference();
-            console.log('💰 Price info BEFORE update:', priceInfoBeforeUpdate);
         }
 
         // Siapkan data backgrounds
@@ -648,15 +761,18 @@ async function executeSubmitQueue(paymentMethod, paymentChannel) {
             throw new Error('Data tiket tidak valid');
         }
         
-        // Update payment method & channel in database if not edit mode
+        // Update payment method & channel via RPC (BUG-001 RLS hardening)
         if (!isEditMode && paymentMethod) {
-            await supabaseClient
-                .from('queues')
-                .update({ 
-                    payment_method: paymentMethod,
-                    payment_channel: paymentChannel
-                })
-                .eq('nomor_antrian', myQueueId);
+            const { error: pmError } = await supabaseClient.rpc('customer_set_payment_meta', {
+                p_nomor_antrian: myQueueId,
+                p_payment_method: paymentMethod,
+                p_payment_channel: paymentChannel,
+                p_payment_trx_id: null
+            });
+            
+            if (pmError) {
+                console.error('Failed to set payment method:', pmError);
+            }
                 
             updateTicketPaymentUI(paymentMethod, paymentChannel);
         } else if (isEditMode) {
@@ -669,54 +785,56 @@ async function executeSubmitQueue(paymentMethod, paymentChannel) {
             let shouldUpdate = false;
             
             if (priceInfo && priceInfo.wasLunas) {
-                // Kasus 1: status awal LUNAS
+                // Kasus 1: status awal LUNAS — gunakan paidAmount untuk handle kelebihan bayar yang sudah ada
                 shouldUpdate = true;
-                if (priceInfo.needsPayment) {
-                    // Harga naik → status jadi belum lunas
+                const balance = priceInfo.newTotal - priceInfo.paidAmount;
+                
+                if (balance > 0) {
+                    // Harga naik melebihi yang sudah dibayar → kurang bayar
                     newPaymentStatus = 'belum_lunas';
-                    paymentNoteOnly = `Kurang bayar: ${formatCurrency(priceInfo.difference)} (dari ${formatCurrency(priceInfo.oldTotal)} → ${formatCurrency(priceInfo.newTotal)})`;
-                } else if (priceInfo.needsRefund) {
-                    // Harga turun → tetap lunas, ada kelebihan bayar
+                    paymentNoteOnly = `Kurang bayar: ${formatCurrency(balance)} (sudah bayar ${formatCurrency(priceInfo.paidAmount)} dari ${formatCurrency(priceInfo.newTotal)})`;
+                } else if (balance < 0) {
+                    // Harga turun atau sudah overpaid → kelebihan bayar
                     newPaymentStatus = 'lunas';
-                    paymentNoteOnly = `Kelebihan bayar: ${formatCurrency(Math.abs(priceInfo.difference))} (akan dikembalikan)`;
+                    paymentNoteOnly = `Kelebihan bayar: ${formatCurrency(-balance)} (akan dikembalikan)`;
                 } else {
-                    // Harga sama → tetap lunas, hapus payment note
+                    // Pas
                     newPaymentStatus = 'lunas';
                     paymentNoteOnly = '';
                 }
             } else if (priceInfo) {
-                // Kasus 2: status awal BELUM LUNAS
-                // Recalculate berdasarkan total yang sudah dibayar (dari payment note lama)
-                // Asumsi: kalau ada "Kurang bayar X", berarti sudah bayar (oldTotal - X)... 
-                // Tapi karena kita tidak tracking pembayaran detail, cek apakah notes lama menunjukkan kurang bayar
-                // Bersihkan saja payment notes kalau tidak ada selisih sama dengan oldTotal
-                // (Logika konservatif: tidak ubah status, hanya bersihkan stale payment note kalau harga balik = oldTotal lama sebelum perubahan)
-                shouldUpdate = false;
+                // BUG-002 FIX: Kasus 2 — status awal BELUM LUNAS (atau LUNAS-after-edit lain)
+                // Recalculate berdasarkan paidAmount yang sudah dibayar customer
+                shouldUpdate = true;
+                const balance = priceInfo.newTotal - priceInfo.paidAmount;
+                
+                if (balance > 0) {
+                    // Masih kurang bayar
+                    newPaymentStatus = 'belum_lunas';
+                    paymentNoteOnly = `Kurang bayar: ${formatCurrency(balance)} (sudah bayar ${formatCurrency(priceInfo.paidAmount)} dari ${formatCurrency(priceInfo.newTotal)})`;
+                } else if (balance < 0) {
+                    // Sudah bayar lebih → kelebihan
+                    newPaymentStatus = 'lunas';
+                    paymentNoteOnly = `Kelebihan bayar: ${formatCurrency(-balance)} (akan dikembalikan)`;
+                } else {
+                    // Pas
+                    newPaymentStatus = 'lunas';
+                    paymentNoteOnly = '';
+                }
             }
             
-            // Update database kalau perlu
+            // Update database kalau perlu via RPC (BUG-001 RLS hardening)
             if (shouldUpdate && newPaymentStatus !== null) {
                 const combinedNotes = combineNotesParts(manualNotes, paymentNoteOnly);
                 
-                console.log('🔧 Updating payment:', {
-                    newPaymentStatus,
-                    manualNotes,
-                    paymentNoteOnly,
-                    myQueueId
+                const { error: updateError } = await supabaseClient.rpc('customer_apply_smart_payment', {
+                    p_nomor_antrian: myQueueId,
+                    p_payment_status: newPaymentStatus,
+                    p_notes: combinedNotes
                 });
                 
-                const { error: updateError } = await supabaseClient
-                    .from('queues')
-                    .update({ 
-                        payment_status: newPaymentStatus,
-                        notes: combinedNotes
-                    })
-                    .eq('nomor_antrian', myQueueId);
-                
                 if (updateError) {
-                    console.error('❌ Error updating payment status:', updateError);
-                } else {
-                    console.log('✅ Payment status & notes updated');
+                    console.error('Error updating payment status:', updateError);
                 }
             }
             
@@ -746,7 +864,7 @@ async function executeSubmitQueue(paymentMethod, paymentChannel) {
             const bg = backgrounds.find(b => b.id === row.background_id);
             if (bg) {
                 html += `<div class="border-b-2 border-black border-dashed pb-2 last:border-0 font-bold text-sm">
-                    ${bg.nama_background} <span class="float-right px-2 bg-neoYellow border border-black">${row.jumlah_foto}x</span>
+                    ${escapeHTML(bg.nama_background)} <span class="float-right px-2 bg-neoYellow border border-black">${row.jumlah_foto}x</span>
                 </div>`;
             }
         });
@@ -779,6 +897,8 @@ async function executeSubmitQueue(paymentMethod, paymentChannel) {
         renderTicketStatuses();
         updateTicketPrice();
         subscribeMyTicket();
+        // BUG-024 FIX: notify tab lain
+        broadcastQueueChange(myQueueId);
 
     } catch (err) {
         console.error(err);
@@ -795,9 +915,18 @@ async function executeSubmitQueue(paymentMethod, paymentChannel) {
             const current = parts[1];
             const max = parts[2];
             errorMessage = `🎫 <b>Maaf, kuota tiket sudah HABIS!</b><br><br>Tiket terjual: <b>${current}/${max}</b><br><br>Hubungi panitia untuk informasi lebih lanjut.`;
+        } else if (errorMessage.includes('TICKET_LOCKED:')) {
+            // BUG-032 FIX: server-side validation
+            errorMessage = `🔒 <b>Tiket Tidak Bisa Diedit</b><br><br>Tiket ini sudah dipanggil, selesai, atau dibatalkan, sehingga tidak bisa diubah lagi.<br><br>Hubungi panitia jika ada masalah.`;
+        } else if (errorMessage.includes('INVALID_PIGURA:')) {
+            errorMessage = `📦 <b>Jumlah Pigura Tidak Valid</b><br><br>Jumlah pigura harus antara 0-20 pcs.`;
+        } else if (errorMessage.includes('INVALID_QTY:')) {
+            errorMessage = `🔢 <b>Jumlah Foto Tidak Valid</b><br><br>Jumlah foto per background harus antara 1-50.`;
+        } else if (errorMessage.includes('PAYMENT_LOCKED:')) {
+            errorMessage = `💳 <b>Pembayaran Terkunci</b><br><br>Tiket sudah lunas, tidak bisa ubah metode pembayaran.`;
         }
         
-        showPopup("Kesalahan", errorMessage);
+        showPopup("Kesalahan", errorMessage, true);
         resetApp();
     }
 }
@@ -827,21 +956,53 @@ function updateTicketPaymentUI(method, channel) {
     }
 }
 
+let isPaymentInFlight = false; // BUG-015 FIX: prevent double-charge
+
 async function payNowOnline() {
     if (!myQueueId) return;
+    
+    // BUG-015 FIX: Guard concurrent payment requests
+    if (isPaymentInFlight) {
+        showPopup('Sedang Diproses', 'Permintaan pembayaran sebelumnya sedang diproses. Mohon tunggu.');
+        return;
+    }
     
     const btn = document.querySelector('#online-payment-actions button');
     const originalText = btn.innerHTML;
     btn.innerHTML = 'MENGALIHKAN...';
     btn.disabled = true;
+    isPaymentInFlight = true;
 
     try {
         const { data: qData } = await supabaseClient
             .from('queues')
-            .select('nama_lengkap, no_wa, payment_channel, notes')
+            .select('nama_lengkap, no_wa, payment_channel, notes, payment_trx_id, payment_status')
             .eq('nomor_antrian', myQueueId)
             .limit(1)
             .single();
+        
+        // BUG-015 FIX: Cek kalau sudah ada pending trx, reuse jangan create baru
+        // (kalau ada trx_id existing dan status masih belum_lunas)
+        if (qData?.payment_trx_id && qData?.payment_status === 'belum_lunas') {
+            const reuse = await new Promise(resolve => {
+                showConfirm(
+                    '💳 Tagihan Sudah Ada',
+                    `Anda sudah punya tagihan online aktif untuk tiket ini.<br><br>Klik <b>BUAT BARU</b> hanya jika tagihan lama tidak bisa diakses.`,
+                    '🆕 BUAT TAGIHAN BARU',
+                    () => resolve(false)  // user pilih buat baru
+                );
+                // Tombol BATAL = pakai trx lama (tapi kita tidak punya pay_url-nya, jadi tutup saja)
+                const cancelBtn = document.querySelector('#popup-actions button:not(#btn-confirm-action)');
+                if (cancelBtn) {
+                    const origClick = cancelBtn.onclick;
+                    cancelBtn.onclick = () => { if (origClick) origClick(); resolve(true); };
+                }
+            });
+            if (reuse) {
+                showPopup('Info', 'Silakan tunggu pembayaran sebelumnya selesai atau hubungi panitia jika butuh bantuan.');
+                return; // finally block akan reset isPaymentInFlight
+            }
+        }
         
         let totalHarga = 0;
         let customerName = qData?.nama_lengkap || 'Customer';
@@ -855,7 +1016,7 @@ async function payNowOnline() {
         } else {
             // Re-calculate from state if page reloaded
             const totalFoto = Object.values(myTicketStatuses).reduce((sum, item) => sum + (item.qty || 0), 0);
-            const savedPigura = parseInt(localStorage.getItem('myPiguraQty') || '0');
+            const savedPigura = safeParseInt(localStorage.getItem('myPiguraQty'));
             totalHarga = (totalFoto * HARGA_PER_FOTO) + (savedPigura * HARGA_PIGURA);
         }
         
@@ -866,9 +1027,9 @@ async function payNowOnline() {
         
         if (qData?.notes) {
             const parsed = parseNotesParts(qData.notes);
-            const matchKurang = parsed.payment.match(/Kurang bayar:\s*Rp\s*([\d.,]+)/);
+            const matchKurang = parsed.payment.match(/Kurang bayar:\s*(Rp\s*[\d.,]+)/);
             if (matchKurang) {
-                kurangBayar = parseInt(matchKurang[1].replace(/[.,]/g, '')) || 0;
+                kurangBayar = parseRupiah(matchKurang[1]);
                 if (kurangBayar > 0) {
                     amountToPay = kurangBayar;
                     isPartialPayment = true;
@@ -878,8 +1039,6 @@ async function payNowOnline() {
         
         if (amountToPay <= 0) {
             showPopup('Info', 'Tidak ada tagihan yang perlu dibayar.');
-            btn.innerHTML = originalText;
-            btn.disabled = false;
             return;
         }
         
@@ -903,8 +1062,6 @@ async function payNowOnline() {
                 }
             });
             if (!confirmed) {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
                 return;
             }
         }
@@ -923,17 +1080,16 @@ async function payNowOnline() {
         
         if (payError || (payData && payData.error)) {
             console.error("Payment Gateway Error:", payError || payData.error);
-            showPopup('Gagal', 'Gagal membuat tagihan online. Silakan coba lagi atau bayar tunai.');
-            btn.innerHTML = originalText;
-            btn.disabled = false;
+            showPopup('Gagal', 'Gagal membuat tagihan online. Silakan coba lagi atau bayar tunai.', true);
         } else if (payData && payData.data && payData.data.pay_url) {
             window.open(payData.data.pay_url, '_blank');
-            btn.innerHTML = originalText;
-            btn.disabled = false;
         }
     } catch (e) {
         console.error(e);
-        showPopup('Error', 'Terjadi kesalahan sistem.');
+        showPopup('Error', 'Terjadi kesalahan sistem.', true);
+    } finally {
+        // BUG-015 FIX: selalu reset flag & button state
+        isPaymentInFlight = false;
         btn.innerHTML = originalText;
         btn.disabled = false;
     }
@@ -960,15 +1116,27 @@ async function confirmChangePayment(method, channel) {
     document.getElementById('ticket-payment-status').innerHTML = 'MEMPERBARUI...';
     
     try {
-        await supabaseClient.from('queues').update({
-            payment_method: method,
-            payment_channel: channel
-        }).eq('nomor_antrian', myQueueId);
+        // BUG-001 RLS hardening: pakai RPC instead of direct UPDATE
+        const { error } = await supabaseClient.rpc('customer_set_payment_meta', {
+            p_nomor_antrian: myQueueId,
+            p_payment_method: method,
+            p_payment_channel: channel,
+            p_payment_trx_id: null
+        });
+        
+        if (error) {
+            if (String(error.message).includes('PAYMENT_LOCKED')) {
+                showPopup('Tidak Bisa', 'Tiket sudah lunas, tidak bisa ganti metode pembayaran.', true);
+            } else {
+                throw error;
+            }
+            return;
+        }
         
         updateTicketPaymentUI(method, channel);
     } catch (e) {
         console.error(e);
-        showPopup('Gagal', 'Gagal mengubah metode pembayaran.');
+        showPopup('Gagal', 'Gagal mengubah metode pembayaran.', true);
     }
 }
 
@@ -977,7 +1145,7 @@ async function confirmChangePayment(method, channel) {
 // ============================================
 function updateTicketPrice() {
     const totalFoto = Object.values(myTicketStatuses).reduce((sum, item) => sum + (item.qty || 0), 0);
-    const savedPigura = parseInt(localStorage.getItem('myPiguraQty') || '0');
+    const savedPigura = safeParseInt(localStorage.getItem('myPiguraQty'));
     const hargaFoto = totalFoto * HARGA_PER_FOTO;
     const hargaPigura = savedPigura * HARGA_PIGURA;
     const totalHarga = hargaFoto + hargaPigura;
@@ -999,6 +1167,8 @@ function renderTicketStatuses() {
     const html = Object.keys(myTicketStatuses).map(bgId => {
         const item = myTicketStatuses[bgId];
         if (!notifiedStates[item.id]) notifiedStates[item.id] = {};
+        // BUG-010 FIX: skip notification saat masih dalam grace period (initial load)
+        const inGracePeriod = Date.now() < notificationGraceUntil;
 
         let statusBadge = '';
         let bgClass = 'bg-white';
@@ -1010,7 +1180,9 @@ function renderTicketStatuses() {
             isAnyCalled = true;
 
             if (!notifiedStates[item.id].called) {
-                showNotification("Giliran Anda!", `Waktunya menuju ${item.name} sekarang!`);
+                if (!inGracePeriod) {
+                    showNotification("Giliran Anda!", `Waktunya menuju ${item.name} sekarang!`);
+                }
                 notifiedStates[item.id].called = true;
             }
         } else if (item.status === STATUS.DITUNDA) {
@@ -1030,11 +1202,15 @@ function renderTicketStatuses() {
             positionInfo = `<div class="mt-3 font-mono font-bold text-xs bg-black text-white inline-block px-2 py-1 shadow-[2px_2px_0px_0px_#000] max-w-full break-words whitespace-normal">Di depan Anda: ${aheadCount} orang</div>`;
 
             if (aheadCount === 3 && !notifiedStates[item.id].three) {
-                showNotification("Bersiap-siap!", `Sisa 3 antrian lagi di depan Anda untuk ${item.name}.`);
+                if (!inGracePeriod) {
+                    showNotification("Bersiap-siap!", `Sisa 3 antrian lagi di depan Anda untuk ${item.name}.`);
+                }
                 notifiedStates[item.id].three = true;
             }
             if (aheadCount === 1 && !notifiedStates[item.id].one) {
-                showNotification("Hampir tiba!", `Sisa 1 antrian lagi! Segera mendekat ke ${item.name}.`);
+                if (!inGracePeriod) {
+                    showNotification("Hampir tiba!", `Sisa 1 antrian lagi! Segera mendekat ke ${item.name}.`);
+                }
                 notifiedStates[item.id].one = true;
             }
         }
@@ -1042,7 +1218,7 @@ function renderTicketStatuses() {
         return `
         <div class="border-2 border-black p-4 flex flex-col space-y-3 ${bgClass} shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
             <div class="flex flex-wrap justify-between items-center font-black uppercase text-lg leading-tight gap-2">
-                <div class="flex items-center flex-wrap gap-2 w-full">${item.name} <span class="text-xs font-mono font-bold bg-white border border-black text-black px-1.5 rounded-sm whitespace-nowrap">${item.qty}x</span></div>
+                <div class="flex items-center flex-wrap gap-2 w-full">${escapeHTML(item.name)} <span class="text-xs font-mono font-bold bg-white border border-black text-black px-1.5 rounded-sm whitespace-nowrap">${item.qty}x</span></div>
             </div>
             <div class="font-bold text-xs tracking-widest">
                 ${statusBadge}
@@ -1099,7 +1275,7 @@ function editOrder() {
     });
     
     // Restore pigura quantity
-    const savedPigura = parseInt(localStorage.getItem('myPiguraQty') || '0');
+    const savedPigura = safeParseInt(localStorage.getItem('myPiguraQty'));
     piguraQty = savedPigura;
     if (document.getElementById('qty-pigura')) {
         document.getElementById('qty-pigura').textContent = piguraQty;
@@ -1139,7 +1315,7 @@ function cancelEditOrder() {
         }
     });
     
-    piguraQty = parseInt(localStorage.getItem('myPiguraQty') || '0');
+    piguraQty = safeParseInt(localStorage.getItem('myPiguraQty'));
     if (document.getElementById('qty-pigura')) {
         document.getElementById('qty-pigura').textContent = piguraQty;
     }
@@ -1165,10 +1341,18 @@ function subscribeMyTicket() {
         supabaseClient.removeChannel(realtimeChannel);
     }
 
-    // Channel unik per booth untuk efisiensi
+    // BUG-012 FIX: filter per booth_id agar customer tidak terima update
+    // dari booth lain (efisiensi bandwidth + privacy)
     const channelName = currentBoothId ? `customer-booth-${currentBoothId}` : 'customer-all';
+    const filterStr = currentBoothId ? `booth_id=eq.${currentBoothId}` : undefined;
+    
     realtimeChannel = supabaseClient.channel(channelName)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'queues' }, async payload => {
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'queues',
+            ...(filterStr ? { filter: filterStr } : {})
+        }, async payload => {
             const newRow = payload.new || payload.old;
 
             if (newRow && newRow.nomor_antrian === myQueueId) {
@@ -1187,6 +1371,8 @@ function subscribeMyTicket() {
         })
         .subscribe();
 }
+
+// (cleanup channel di-handle oleh beforeunload listener di atas — BUG-034)
 
 // Helper: Update tampilan status pembayaran berdasarkan data dari DB
 function refreshPaymentStatusUI(paymentStatus, paymentMethod, paymentChannel, paymentNotes) {
@@ -1355,11 +1541,12 @@ async function restoreQueue(queueId) {
     document.getElementById('ticket-section').classList.remove('hidden');
     document.getElementById('ticket-items').innerHTML = '<div class="text-center font-bold">Memulihkan tiket Anda...</div>';
 
+    // BUG-028 FIX: ambil semua tiket (termasuk yang selesai) tanpa filter status,
+    // baru handle setelahnya
     let query = supabaseClient
         .from('queues')
         .select('*, backgrounds(nama_background)')
-        .eq('nomor_antrian', queueId)
-        .in('status', ACTIVE_STATUSES);
+        .eq('nomor_antrian', queueId);
 
     // Jika ada booth, pastikan tiket milik booth yang sama
     if (currentBoothId) query = query.eq('booth_id', currentBoothId);
@@ -1367,7 +1554,34 @@ async function restoreQueue(queueId) {
     const { data, error } = await query;
 
     if (error || !data || data.length === 0) {
-        showPopup("Tiket Kadaluarsa", `Antrian <b>${queueId}</b> tidak ditemukan, dibatalkan, atau sudah selesai.`);
+        showPopup("Tiket Tidak Ditemukan", `Antrian <b>${queueId}</b> tidak ditemukan.`, true);
+        resetApp();
+        return;
+    }
+    
+    // BUG-028 FIX: kalau semua items sudah selesai/batal, tampilkan view-only tanpa edit
+    const hasActive = data.some(r => ACTIVE_STATUSES.includes(r.status));
+    const allFinished = data.every(r => r.status === STATUS.SELESAI);
+    const allCancelled = data.every(r => r.status === STATUS.BATAL);
+    
+    if (allCancelled) {
+        showPopup("Tiket Dibatalkan", `Antrian <b>${queueId}</b> sudah dibatalkan.`, true);
+        resetApp();
+        return;
+    }
+    
+    if (!hasActive && allFinished) {
+        // View-only: foto sudah selesai
+        myQueueId = queueId;
+        const savedKey = 'myQueueId_booth_' + (currentBoothId || 'default');
+        localStorage.removeItem(savedKey); // hapus dari active state
+        
+        showPopup(
+            '✅ Foto Anda Sudah Selesai!',
+            `Tiket <b>${escapeHTML(queueId)}</b> atas nama <b>${escapeHTML(data[0].nama_lengkap)}</b> sudah selesai diproses.<br><br>` +
+            `Silakan ambil foto Anda di lokasi pengambilan.<br><br>` +
+            `<i>Tiket ini tidak bisa diedit lagi.</i>`
+        );
         resetApp();
         return;
     }
@@ -1468,9 +1682,9 @@ async function lacakTiket() {
         uniqueTickets.forEach(t => {
             html += `
                 <div class="bg-bgLight border-2 border-black p-2 shadow-[2px_2px_0px_0px_#000]">
-                    <span class="font-black bg-neoYellow px-2 border-2 border-black inline-block mb-1">${t.nomor_antrian}</span>
-                    <div class="leading-tight uppercase font-black">${t.nama_lengkap}</div>
-                    <div class="font-mono text-xs uppercase">${t.kelas}</div>
+                    <span class="font-black bg-neoYellow px-2 border-2 border-black inline-block mb-1">${escapeHTML(t.nomor_antrian)}</span>
+                    <div class="leading-tight uppercase font-black">${escapeHTML(t.nama_lengkap)}</div>
+                    <div class="font-mono text-xs uppercase">${escapeHTML(t.kelas)}</div>
                 </div>
             `;
         });
@@ -1482,16 +1696,25 @@ async function lacakTiket() {
     restoreQueue(uniqueTickets[0].nomor_antrian);
 }
 
-// Customer-specific popup (with random color)
-function showPopup(title, bodyHTML) {
+// Customer-specific popup (with random color, except errors which are red)
+// BUG-017 FIX: handle isError flag — paksa pakai bg-neoRed kalau error
+function showPopup(title, bodyHTML, isError = false) {
     const colors = ['bg-neoYellow', 'bg-neoPink', 'bg-neoCyan', 'bg-neoGreen'];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    const colorClass = isError ? 'bg-neoRed' : colors[Math.floor(Math.random() * colors.length)];
 
     const titleEl = document.getElementById('popup-title');
     titleEl.textContent = title;
-    titleEl.className = `text-xl font-black uppercase tracking-tight border-b-4 border-black pb-1 mb-4 inline-block pr-4 ${randomColor}`;
+    titleEl.className = `text-xl font-black uppercase tracking-tight border-b-4 border-black pb-1 mb-4 inline-block pr-4 ${colorClass}`;
 
     document.getElementById('popup-body').innerHTML = bodyHTML;
+    
+    // Reset popup-actions ke default (tombol TUTUP saja) — fix kalau sebelumnya
+    // pernah dipakai oleh showConfirm
+    const actionsEl = document.getElementById('popup-actions');
+    if (actionsEl) {
+        actionsEl.innerHTML = `<button onclick="closePopup()" class="flex-1 bg-black text-white font-black uppercase px-4 py-3 hover:bg-gray-800 transition-colors border-4 border-black shadow-[4px_4px_0px_0px_#000] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_#000]">TUTUP</button>`;
+    }
+    
     const popup = document.getElementById('custom-popup');
     const content = document.getElementById('popup-content');
 

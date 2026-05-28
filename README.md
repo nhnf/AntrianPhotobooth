@@ -752,6 +752,66 @@ Check Edge Function logs:
 
 ## 📝 Changelog
 
+### v2.2.1 (2026-05-25) — Bug Fixes (Round 6 — Cleanup)
+- 🐛 **BUG-024 FIX** — `BroadcastChannel('customer-tabs')` sync state antar tab customer (auto reload kalau queue same berubah di tab lain)
+- 🐛 **BUG-033/034 FIX** — Track `boothSyncChannel`, cleanup all channels saat `beforeunload`
+- 🐛 **BUG-035 FIX** — Broadcast `clear_cache` include `boothId`, customer filter agar cuma respons untuk booth-nya
+- 🐛 **BUG-043 FIX** — UNIQUE partial index untuk `payment_trx_id` (cegah duplicate trx)
+- 🐛 **BUG-044 FIX** — UNIQUE partial index untuk `booths.ticket_prefix` (cegah collision)
+- 🐛 **BUG-045 FIX** — Server-side validation `pigura` (0-20) & `jumlah_foto` (1-50) di RPC
+- 🐛 **BUG-049 FIX** — Subtle loading indicator untuk subsequent fetch (opacity 0.5)
+- ✨ Migration baru: `add_constraints.sql`, `add_validation_pigura.sql`
+- ✨ Error handlers baru di customer.js: `INVALID_PIGURA`, `INVALID_QTY`, `PAYMENT_LOCKED`
+
+### v2.2.0 (2026-05-25) — RLS Hardening 🔒
+- 🔒 **BUG-001 FIX** — RLS policy "Public update access for queues" dihapus. Anon user tidak bisa lagi flip status, picked_up, notes via direct API.
+- 🔒 **BUG-008 FIX** — `payment-return.html` tidak lagi update DB dari client. Webhook adalah authoritative source.
+- 🔒 **BUG-016 FIX** — Public tidak bisa update notes bypass parser (sekaligus BUG-001)
+- 🔒 **BUG-030 FIX** — `picked_up` tidak bisa di-flip via direct API. Pengambilan & sekretariat pakai RPC `pengambilan_set_pickup()` yang require auth.
+- ✨ Migration `rls_hardening.sql` — bikin 4 RPC SECURITY DEFINER:
+  - `customer_set_payment_meta()` — customer ubah method/channel
+  - `customer_apply_smart_payment()` — customer apply smart payment update
+  - `sekretariat_toggle_payment_status()` — auth-only toggle dengan auto-clear notes
+  - `pengambilan_set_pickup()` — auth-only pickup status
+- ✨ Customer.js, sekretariat.js, pengambilan.js: replace direct UPDATE dengan RPC calls
+
+### v2.1.5 (2026-05-25) — Bug Fixes (Round 5 — Easy Wins Batch)
+- 🐛 **BUG-010 FIX** — Notif "sisa N antrian lagi" tidak misfire saat customer reload page (grace period 3 detik untuk skip notif initial render)
+- 🐛 **BUG-028 FIX** — Tiket yang sudah selesai sekarang tampilkan popup "Foto Anda Sudah Selesai" + clean localStorage, tidak lagi kelihatan kayak "kadaluarsa"
+- 🐛 **BUG-032 FIX** — Server-side validation di `update_queue_order`: error `TICKET_LOCKED` kalau status sudah selesai/batal/dipanggil
+- 🐛 **BUG-039 FIX** — Migration drift: `update_queue_order` SQL function sekarang ada di repo (`supabase/migrations/fix_update_queue_order.sql`)
+- 🐛 **BUG-046 FIX** — Helper `parseRupiah()` & `safeParseInt()` global di shared/config.js, replace duplicate inline regex parsing
+
+### v2.1.4 (2026-05-25) — Bug Fixes (Round 4 — Race Conditions & XSS)
+- 🐛 **BUG-004 PARTIAL FIX** — Webhook idempotency: skip duplicate webhook delivery dengan trx_id sama. Audit trail (payment_events table) belum.
+- 🐛 **BUG-006 FIX** — Conditional update di webhook (`.eq('payment_status', 'belum_lunas')`) — mencegah overwrite saat customer sedang edit
+- 🐛 **BUG-007 FIX** — `saveNotes` & `saveCustomerEdit` re-fetch payment notes dari DB (race-safe) bukan dari local cache
+- 🐛 **BUG-018 FIX** — Audit XSS escaping di sekretariat.js, customer.js, pengambilan.js, monitor.js: wrap user input dengan `escapeHTML()` & attribute dengan `escapeAttr()`
+- 🐛 **BUG-019 FIX** — `escapeHTML()` & helper baru `escapeAttr()` dipindah ke `shared/config.js` agar konsisten available di semua dashboard
+
+### v2.1.3 (2026-05-25) — Bug Fixes (Round 3 — Quick Wins)
+- 🐛 **BUG-012 FIX** — Customer realtime sekarang filter `booth_id`, tidak lagi terima update dari semua booth
+- 🐛 **BUG-013 FIX** — Sekretariat realtime cleanup channel saat unsubscribe & beforeunload, mencegah memory leak
+- 🐛 **BUG-027 FIX** — Notes input di sekretariat tidak kehilangan focus saat realtime rerender (debounce + skip kalau ada input aktif)
+- 🐛 **BUG-031 FIX** — `togglePaymentMethod` tidak lagi panggil `applyFilters()` 2x (yang jalan meskipun user batal)
+- 🐛 **BUG-038** — Verified not-a-bug, code sudah include `DITUNDA`
+- 🐛 **BUG-040 FIX** — `sanitizeInput()` lebih ketat: strip event handlers, javascript: scheme, partial tags
+- 🐛 **BUG-047 FIX** — Hapus debug console logs production
+
+### v2.1.2 (2026-05-25) — Bug Fixes (Round 2)
+- 🐛 **BUG-015 FIX** — Tombol "BAYAR SEKARANG" tidak bisa di-klik berkali-kali (double-charge prevention). Cek juga existing pending trx sebelum create baru.
+- 🐛 **BUG-017 FIX** — Customer popup error sekarang muncul dengan warna merah (sebelumnya pakai random color). Tambah parameter `isError` ke `showPopup()`.
+- 🐛 **BUG-021 FIX** — Tombol "AMBIL TIKET" / "SIMPAN PERUBAHAN" disable saat submit, mencegah dobel submit & duplicate ticket.
+- 🐛 **BUG-022 FIX** — `parseInt(localStorage)` di-replace dengan `safeParseInt()` helper (handle NaN, negative).
+- 🐛 **BUG-023 FIX** — `customerTicketPrefix` sekarang di-save ke localStorage saat `applyBoothUI`, `lacakTiket` jadi accurate.
+
+### v2.1.1 (2026-05-25) — Bug Fixes
+- 🐛 **BUG-002 FIX** — Smart Payment "Kasus 2" sekarang menghitung kurang/lebih bayar berdasarkan paid amount, bukan stale note. Customer yang edit pesanan berkali-kali (saat masih belum_lunas) tidak akan ada note yang outdated lagi.
+- 🐛 **BUG-005 FIX** — Saat sekretariat toggle status ke LUNAS, payment note "Kurang bayar" otomatis ter-clear. Kas Diterima jadi akurat.
+- 🐛 **BUG-003 FIX** — Quota counter sekarang dynamic via SQL trigger. Counter auto-decrement saat status batal/delete. Migration: `supabase/migrations/fix_quota_counter_integrity.sql`
+- 🐛 **BUG-009 FIX** — `submit_queue` sekarang pakai `SELECT FOR UPDATE` mencegah race condition saat 2 customer rebut slot terakhir.
+- ✨ Helper `recompute_booth_ticket_count()` SQL function untuk one-time correction quota counter
+
 ### v2.1.0 (2026-05-25)
 - ✨ **Pembayaran online untuk selisih harga** — saat customer edit pesanan dan ada kurang bayar, tombol "BAYAR SEKARANG" hanya menagih selisihnya (bukan total full)
 - ✨ Popup konfirmasi sebelum redirect ke payment gateway dengan rincian: total pesanan, sudah dibayar, kurang bayar

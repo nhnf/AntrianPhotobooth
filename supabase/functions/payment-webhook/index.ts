@@ -64,12 +64,22 @@ serve(async (req) => {
             const supabase = createClient(supabaseUrl, supabaseServiceRole);
 
             // Ambil notes lama untuk preserve manual notes & clear payment note (Kurang bayar)
+            // BUG-006/007 FIX: ambil juga payment_status & updated_at untuk optimistic concurrency
             const { data: existing } = await supabase
                 .from('queues')
-                .select('notes')
+                .select('notes, payment_status, payment_trx_id')
                 .eq('nomor_antrian', referenceId)
                 .limit(1)
                 .single();
+
+            // BUG-004 FIX: Idempotency — skip kalau sudah lunas dengan trx_id sama
+            if (existing && existing.payment_status === 'lunas' && existing.payment_trx_id === trxId) {
+                console.log(`Webhook duplicate ignored for ${referenceId} (trx ${trxId})`);
+                return new Response(JSON.stringify({ status: 'duplicate_ignored' }), {
+                    headers: { 'Content-Type': 'application/json' },
+                    status: 200,
+                });
+            }
 
             let cleanedNotes = '';
             if (existing && existing.notes) {
@@ -87,7 +97,8 @@ serve(async (req) => {
                 }
             }
 
-            // Update database: lunas + clear payment notes (preserve manual notes)
+            // BUG-006/007 FIX: Conditional update — hanya kalau payment_status masih belum_lunas
+            // Mencegah race dengan customer edit yang berlangsung simultan
             const { data, error } = await supabase
                 .from('queues')
                 .update({ 
@@ -95,13 +106,14 @@ serve(async (req) => {
                     paid_at: new Date().toISOString(),
                     notes: cleanedNotes
                 })
-                .eq('nomor_antrian', referenceId);
+                .eq('nomor_antrian', referenceId)
+                .eq('payment_status', 'belum_lunas');  // ← race guard
 
             if (error) {
                 console.error('Failed to update payment status in DB:', error);
                 throw error;
             }
-            console.log(`Payment confirmed for queue ${referenceId}`);
+            console.log(`Payment confirmed for queue ${referenceId} (trx ${trxId})`);
         }
 
         return new Response(JSON.stringify({ status: 'ok' }), {
