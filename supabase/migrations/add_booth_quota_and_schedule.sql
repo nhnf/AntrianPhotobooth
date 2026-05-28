@@ -60,7 +60,7 @@ BEGIN
     
     -- 4. Generate nomor antrian
     v_ticket_num := NEXTVAL('ticket_sequence');
-    v_nomor_antrian := v_booth.ticket_prefix || '-' || LPAD(v_ticket_num::TEXT, 4, '0');
+    v_nomor_antrian := v_booth.ticket_prefix || '-' || LPAD(v_ticket_num::TEXT, 3, '0');
     
     -- 5. Insert ke tabel queues untuk setiap background
     FOR v_bg IN SELECT * FROM JSONB_ARRAY_ELEMENTS(p_backgrounds)
