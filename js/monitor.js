@@ -222,8 +222,8 @@ function autoScaleName(el) {
     if (!el) return;
     const name = el.textContent.trim();
     // Tentukan ukuran font berdasarkan panjang nama
+    // Hanya set inline style, tidak ubah className (agar text-white tetap)
     if (name.length <= 12) {
-        el.className = el.className.replace(/text-\[[\d.]+rem\]|text-\w+(?=\s)/g, '');
         el.style.fontSize = '';
     } else if (name.length <= 20) {
         el.style.fontSize = 'clamp(1rem, 3vw, 1.75rem)';
