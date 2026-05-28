@@ -56,22 +56,27 @@ BEGIN
     v_nomor_antrian := v_booth.ticket_prefix || '-' || LPAD(v_ticket_num::TEXT, 3, '0');
 
     FOR v_bg IN SELECT * FROM JSONB_ARRAY_ELEMENTS(p_backgrounds) LOOP
-        INSERT INTO queues (
-            booth_id, nomor_antrian, nama_lengkap, kelas, alamat,
-            background_id, jumlah_foto, pigura, no_wa, status, payment_status
-        ) VALUES (
-            p_booth_id, v_nomor_antrian, p_nama, p_kelas, p_alamat,
-            (v_bg->>'background_id')::INTEGER, (v_bg->>'jumlah_foto')::INTEGER,
-            v_pigura, p_no_wa, 'menunggu', 'belum_lunas'
-        ) RETURNING id, background_id, jumlah_foto, status, created_at INTO v_queue_id, v_bg;
+        DECLARE
+            v_bg_id INTEGER := (v_bg->>'background_id')::INTEGER;
+            v_qty   INTEGER := (v_bg->>'jumlah_foto')::INTEGER;
+        BEGIN
+            INSERT INTO queues (
+                booth_id, nomor_antrian, nama_lengkap, kelas, alamat,
+                background_id, jumlah_foto, pigura, no_wa, status, payment_status
+            ) VALUES (
+                p_booth_id, v_nomor_antrian, p_nama, p_kelas, p_alamat,
+                v_bg_id, v_qty,
+                v_pigura, p_no_wa, 'menunggu', 'belum_lunas'
+            ) RETURNING id INTO v_queue_id;
 
-        v_rows := v_rows || JSONB_BUILD_OBJECT(
-            'id', v_queue_id,
-            'background_id', (v_bg->>'background_id')::INTEGER,
-            'jumlah_foto', (v_bg->>'jumlah_foto')::INTEGER,
-            'status', 'menunggu',
-            'created_at', NOW()
-        );
+            v_rows := v_rows || JSONB_BUILD_OBJECT(
+                'id', v_queue_id,
+                'background_id', v_bg_id,
+                'jumlah_foto', v_qty,
+                'status', 'menunggu',
+                'created_at', NOW()
+            );
+        END;
     END LOOP;
 
     RETURN JSONB_BUILD_OBJECT('nomor_antrian', v_nomor_antrian, 'rows', v_rows);
