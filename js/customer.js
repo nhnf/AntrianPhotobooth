@@ -979,33 +979,10 @@ async function payNowOnline() {
     try {
         const { data: qData } = await supabaseClient
             .from('queues')
-            .select('nama_lengkap, no_wa, payment_channel, notes, payment_trx_id, payment_status')
+            .select('nama_lengkap, no_wa, payment_channel, notes, payment_status')
             .eq('nomor_antrian', myQueueId)
             .limit(1)
             .single();
-        
-        // BUG-015 FIX: Cek kalau sudah ada pending trx, reuse jangan create baru
-        // (kalau ada trx_id existing dan status masih belum_lunas)
-        if (qData?.payment_trx_id && qData?.payment_status === 'belum_lunas') {
-            const reuse = await new Promise(resolve => {
-                showConfirm(
-                    '💳 Tagihan Sudah Ada',
-                    `Anda sudah punya tagihan online aktif untuk tiket ini.<br><br>Klik <b>BUAT BARU</b> hanya jika tagihan lama tidak bisa diakses.`,
-                    '🆕 BUAT TAGIHAN BARU',
-                    () => resolve(false)  // user pilih buat baru
-                );
-                // Tombol BATAL = pakai trx lama (tapi kita tidak punya pay_url-nya, jadi tutup saja)
-                const cancelBtn = document.querySelector('#popup-actions button:not(#btn-confirm-action)');
-                if (cancelBtn) {
-                    const origClick = cancelBtn.onclick;
-                    cancelBtn.onclick = () => { if (origClick) origClick(); resolve(true); };
-                }
-            });
-            if (reuse) {
-                showPopup('Info', 'Silakan tunggu pembayaran sebelumnya selesai atau hubungi panitia jika butuh bantuan.');
-                return; // finally block akan reset isPaymentInFlight
-            }
-        }
         
         let totalHarga = 0;
         let customerName = qData?.nama_lengkap || 'Customer';
