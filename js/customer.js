@@ -145,10 +145,8 @@ function updateBoothStatusAlert(booth) {
     // SUDAH TUTUP
     if (salesEnd && now > salesEnd) {
         overlayContent.innerHTML = `
-            <div class="text-3xl font-black uppercase mb-3">🔒 MOHON MAAF<br>PHOTOBOOTH<br>TELAH TUTUP</div>
-            <div class="text-sm font-bold text-white/80">Penjualan tiket telah berakhir pada:<br>
-            <b>${salesEnd.toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' })}</b></div>
-            <div class="mt-4 text-xs font-mono text-white/60">Terima kasih telah berkunjung!</div>
+            <div class="text-5xl mb-4">🔒</div>
+            <div class="text-3xl font-black uppercase">MOHON MAAF<br>PHOTOBOOTH<br>TELAH TUTUP</div>
         `;
         overlay.classList.remove('hidden');
         quotaAlert.classList.add('hidden');
