@@ -307,10 +307,13 @@ function renderCalledPanel() {
             </div>
 
             <!-- Next Footer -->
-            <div class="border-t-4 border-black bg-neoYellow px-3 py-1.5 font-mono text-[10px] font-bold uppercase truncate">
-                ${nextInQueue
-                    ? `Next: ${nextInQueue.nomor_antrian} (${(nextInQueue.nama_lengkap || '-').substring(0, 14)}${(nextInQueue.nama_lengkap || '').length > 14 ? '...' : ''})`
-                    : isNextBusy ? '<span class="text-neoRed font-black tracking-wider">SIBUK DI BG LAIN</span>' : 'Next: —'}
+            <div class="border-t-4 border-black bg-neoYellow px-3 py-3 font-mono font-black uppercase">
+                <div class="text-[10px] tracking-widest text-black/60 mb-0.5">BERIKUTNYA</div>
+                <div class="text-base sm:text-lg leading-tight truncate">
+                    ${nextInQueue
+                        ? `${nextInQueue.nomor_antrian} — ${(nextInQueue.nama_lengkap || '-').substring(0, 16)}${(nextInQueue.nama_lengkap || '').length > 16 ? '...' : ''}`
+                        : isNextBusy ? '<span class="text-neoRed">SIBUK DI BG LAIN</span>' : '<span class="text-black/40">—</span>'}
+                </div>
             </div>
 
             <!-- Action Buttons -->

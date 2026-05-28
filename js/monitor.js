@@ -249,8 +249,11 @@ function renderColumns() {
                 SILAKAN MASUK
             </div>
 
-            <div class="absolute bottom-0 left-0 w-full bg-neoYellow border-t-4 border-black p-2 md:p-3 text-center text-xs md:text-sm font-bold uppercase flex justify-center items-center gap-2" id="next-bg-${bg.id}">
-                NEXT: ${nextInLine[bg.id] ? `<span class="font-black text-sm md:text-base">${escapeHTML(nextInLine[bg.id].nomor_antrian)}</span> <span class="truncate max-w-[150px]">(${escapeHTML(nextInLine[bg.id].nama_lengkap)})</span>` : '-'}
+            <div class="absolute bottom-0 left-0 w-full bg-neoYellow border-t-4 border-black p-2 md:p-4 text-center font-black uppercase flex flex-col items-center gap-0.5" id="next-bg-${bg.id}">
+                <span class="text-[10px] tracking-widest text-black/60">BERIKUTNYA</span>
+                <div class="text-sm md:text-xl lg:text-2xl leading-tight truncate w-full">
+                    ${nextInLine[bg.id] ? `${escapeHTML(nextInLine[bg.id].nomor_antrian)} — <span class="truncate">${escapeHTML(nextInLine[bg.id].nama_lengkap)}</span>` : '<span class="text-black/40">—</span>'}
+                </div>
             </div>
         </div>
         `;
@@ -357,10 +360,10 @@ async function fetchNextInLine(bgId) {
 
     if (data) {
         nextInLine[bgId] = data;
-        nextEl.innerHTML = `NEXT: <span class="font-black text-sm md:text-base">${escapeHTML(data.nomor_antrian)}</span> <span class="truncate max-w-[200px] xl:max-w-[250px]">(${escapeHTML(data.nama_lengkap)})</span>`;
+        nextEl.innerHTML = `<span class="text-[10px] tracking-widest text-black/60">BERIKUTNYA</span><div class="text-sm md:text-xl lg:text-2xl leading-tight truncate w-full">${escapeHTML(data.nomor_antrian)} — ${escapeHTML(data.nama_lengkap)}</div>`;
     } else {
         nextInLine[bgId] = null;
-        nextEl.innerHTML = `NEXT: -`;
+        nextEl.innerHTML = `<span class="text-[10px] tracking-widest text-black/60">BERIKUTNYA</span><div class="text-sm md:text-xl lg:text-2xl text-black/40">—</div>`;
     }
 }
 
