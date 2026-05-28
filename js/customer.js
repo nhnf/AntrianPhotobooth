@@ -861,12 +861,13 @@ async function executeSubmitQueue(paymentMethod, paymentChannel) {
         // Tampilkan item
         let html = '';
         insertedData.forEach(row => {
-            const bg = backgrounds.find(b => b.id === row.background_id);
-            if (bg) {
-                html += `<div class="border-b-2 border-black border-dashed pb-2 last:border-0 font-bold text-sm">
-                    ${escapeHTML(bg.nama_background)} <span class="float-right px-2 bg-neoYellow border border-black">${row.jumlah_foto}x</span>
-                </div>`;
-            }
+            // Cari nama background dari selectedBgs (pasti ada) atau backgrounds array
+            const bgFromSelected = selectedBgs.find(b => b.id === row.background_id);
+            const bgFromAll = backgrounds.find(b => b.id === row.background_id);
+            const bgName = bgFromSelected?.nama_background || bgFromAll?.nama_background || `Background #${row.background_id}`;
+            html += `<div class="border-b-2 border-black border-dashed pb-2 last:border-0 font-bold text-sm">
+                ${escapeHTML(bgName)} <span class="float-right px-2 bg-neoYellow border border-black">${row.jumlah_foto}x</span>
+            </div>`;
         });
         document.getElementById('ticket-items').innerHTML = html;
 
@@ -883,7 +884,9 @@ async function executeSubmitQueue(paymentMethod, paymentChannel) {
 
         myTicketStatuses = {};
         insertedData.forEach(row => {
-            const bgName = selectedBgs.find(b => b.id === row.background_id).nama_background;
+            const bgFromSelected = selectedBgs.find(b => b.id === row.background_id);
+            const bgFromAll = backgrounds.find(b => b.id === row.background_id);
+            const bgName = bgFromSelected?.nama_background || bgFromAll?.nama_background || `Background #${row.background_id}`;
             myTicketStatuses[row.background_id] = {
                 id: row.id,
                 created_at: row.created_at,
