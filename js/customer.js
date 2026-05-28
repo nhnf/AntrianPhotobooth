@@ -1609,6 +1609,12 @@ async function restoreQueue(queueId) {
         };
     });
 
+    // BUG FIX: restore pigura dari DB (bukan hanya localStorage)
+    // pigura disimpan di setiap row dengan nilai sama, ambil dari row pertama
+    const piguraFromDB = data[0]?.pigura || 0;
+    piguraQty = piguraFromDB;
+    localStorage.setItem('myPiguraQty', piguraFromDB);
+
     const nama = data[0].nama_lengkap || '';
     const kelas = data[0].kelas || '';
     const alamat = data[0].alamat || '';

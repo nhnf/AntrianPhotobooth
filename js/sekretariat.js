@@ -185,7 +185,9 @@ function groupCustomers() {
             status: row.status
         });
         g.totalFoto += (row.jumlah_foto || 0);
-        g.totalPigura += (row.pigura || 0);
+        // BUG FIX: pigura disimpan di setiap row (per background), tapi nilainya sama.
+        // Ambil hanya dari row pertama agar tidak dihitung N× lipat.
+        if (!g.piguraSet) { g.totalPigura = row.pigura || 0; g.piguraSet = true; }
         g.statuses.push(row.status);
         // Keep the latest notes, payment status, and pickup status
         if (row.notes) g.notes = row.notes;

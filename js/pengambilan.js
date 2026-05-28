@@ -128,7 +128,8 @@ function processCustomerData() {
         }
         
         const g = groups[row.nomor_antrian];
-        g.totalPigura += (row.pigura || 0);
+        // BUG FIX: pigura disimpan di setiap row, ambil hanya dari row pertama
+        if (!g.piguraSet) { g.totalPigura = row.pigura || 0; g.piguraSet = true; }
         if (row.picked_up) g.picked_up = true;
         
         const bg = backgrounds.find(b => b.id === row.background_id);
