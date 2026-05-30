@@ -369,7 +369,6 @@ async function loadBackgrounds() {
         const { data, error } = await supabaseClient
             .from('backgrounds')
             .select('*')
-            .eq('is_active', true)
             .order('id');
 
         const listEl = document.getElementById('bg-list');
@@ -387,20 +386,25 @@ async function loadBackgrounds() {
         listEl.innerHTML = backgrounds.map((bg, idx) => {
             const color = colors[idx % colors.length];
             const imgPath = `assets/bg${idx + 1}.jpeg`;
+            const isActive = bg.is_active !== false;
             return `
-            <div class="bg-white ${color} border-2 border-black p-2 sm:p-3 flex flex-row items-center gap-2 sm:gap-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1 transition-all">
-                <div class="w-14 h-14 sm:w-20 sm:h-20 shrink-0 border-2 border-black bg-gray-200 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity" onclick="openPreview('${escapeAttr(imgPath)}', '${escapeAttr(bg.nama_background)}')" title="Klik untuk perbesar">
+            <div class="relative bg-white border-2 border-black p-2 sm:p-3 flex flex-row items-center gap-2 sm:gap-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${isActive ? color + ' hover:-translate-y-1 transition-all' : 'opacity-60 grayscale'}">
+                <div class="w-14 h-14 sm:w-20 sm:h-20 shrink-0 border-2 border-black bg-gray-200 overflow-hidden ${isActive ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-not-allowed'}" ${isActive ? `onclick="openPreview('${escapeAttr(imgPath)}', '${escapeAttr(bg.nama_background)}')"` : ''} title="${isActive ? 'Klik untuk perbesar' : 'Background ditutup'}">
                     <img src="${escapeAttr(imgPath)}" alt="${escapeAttr(bg.nama_background)}" class="w-full h-full object-cover" onerror="this.parentElement.style.display='none'">
                 </div>
                 <div class="text-left flex-1 min-w-0">
                     <h3 class="text-sm sm:text-lg font-black uppercase tracking-tight leading-tight">${escapeHTML(bg.nama_background)}</h3>
-                    <p class="font-mono text-[10px] sm:text-xs font-bold text-gray-800 mt-0.5 sm:mt-1 whitespace-nowrap">${formatCurrency(HARGA_PER_FOTO)}/ft</p>
+                    <p class="font-mono text-[10px] sm:text-xs font-bold text-gray-800 mt-0.5 sm:mt-1 whitespace-nowrap">${isActive ? formatCurrency(HARGA_PER_FOTO) + '/ft' : '🔒 DITUTUP'}</p>
                 </div>
-                <div class="flex items-center bg-white border-2 border-black rounded-full overflow-hidden shrink-0">
-                    <button onclick="changeQty(${bg.id}, -1)" class="w-8 h-8 sm:w-10 sm:h-10 bg-white hover:bg-gray-200 font-black text-lg sm:text-xl flex items-center justify-center transition-colors border-r-2 border-black">-</button>
+                <div class="flex items-center bg-white border-2 border-black rounded-full overflow-hidden shrink-0 ${isActive ? '' : 'opacity-40 pointer-events-none'}">
+                    <button ${isActive ? `onclick="changeQty(${bg.id}, -1)"` : 'disabled'} class="w-8 h-8 sm:w-10 sm:h-10 bg-white hover:bg-gray-200 font-black text-lg sm:text-xl flex items-center justify-center transition-colors border-r-2 border-black">-</button>
                     <span id="qty-${bg.id}" class="font-mono font-black text-sm sm:text-lg w-6 sm:w-10 text-center flex items-center justify-center bg-white h-8 sm:h-10">0</span>
-                    <button onclick="changeQty(${bg.id}, 1)" class="w-8 h-8 sm:w-10 sm:h-10 bg-white hover:bg-gray-200 font-black text-lg sm:text-xl flex items-center justify-center transition-colors border-l-2 border-black">+</button>
+                    <button ${isActive ? `onclick="changeQty(${bg.id}, 1)"` : 'disabled'} class="w-8 h-8 sm:w-10 sm:h-10 bg-white hover:bg-gray-200 font-black text-lg sm:text-xl flex items-center justify-center transition-colors border-l-2 border-black">+</button>
                 </div>
+                ${!isActive ? `
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div class="bg-black/70 text-white font-black uppercase text-sm px-3 py-1 tracking-widest">🔒 DITUTUP</div>
+                </div>` : ''}
             </div>
             `;
         }).join('');
@@ -440,6 +444,10 @@ async function loadBackgrounds() {
 // Quantity Management
 // ============================================
 function changeQty(bgId, delta) {
+    // Cek apakah background masih aktif
+    const bg = backgrounds.find(b => b.id === bgId);
+    if (bg && bg.is_active === false) return; // background ditutup, tidak bisa diubah
+    
     bgQuantities[bgId] += delta;
     if (bgQuantities[bgId] < 0) bgQuantities[bgId] = 0;
     if (bgQuantities[bgId] > 10) bgQuantities[bgId] = 10;

@@ -176,7 +176,7 @@ async function loadData() {
     }
 
     try {
-        const { data: bgs, error: bgError } = await supabaseClient.from('backgrounds').select('*').eq('is_active', true).order('id');
+        const { data: bgs, error: bgError } = await supabaseClient.from('backgrounds').select('*').order('id');
         if (bgError) return console.error(bgError);
         backgrounds = bgs;
 
@@ -244,7 +244,7 @@ function renderColumns() {
         const color = colors[index % colors.length];
 
         return `
-        <div id="card-bg-${bg.id}" class="neo-card-monitor bg-white rounded-none flex flex-col items-center min-h-[300px] md:min-h-[400px] lg:h-full relative w-full h-full overflow-hidden">
+        <div id="card-bg-${bg.id}" class="neo-card-monitor bg-white rounded-none flex flex-col items-center min-h-[300px] md:min-h-[400px] lg:h-full relative w-full h-full overflow-hidden ${bg.is_active === false ? 'grayscale opacity-70' : ''}">
             
             <!-- Header background name -->
             <div class="w-full p-2 md:p-4 border-b-4 border-black ${color} text-black text-center z-10 shadow-[0px_4px_0px_0px_#000] shrink-0">
@@ -276,6 +276,14 @@ function renderColumns() {
                     SILAKAN MASUK
                 </div>
             </div>
+
+            <!-- DITUTUP overlay -->
+            ${bg.is_active === false ? `
+            <div class="absolute inset-0 flex items-center justify-center z-30 bg-black/50">
+                <div class="bg-black text-white font-black uppercase text-2xl md:text-4xl px-6 py-4 border-4 border-white tracking-widest text-center">
+                    🔒<br>DITUTUP
+                </div>
+            </div>` : ''}
 
             <!-- BERIKUTNYA footer -->
             <div class="w-full bg-neoYellow border-t-4 border-black px-3 py-2 md:py-3 text-center font-black uppercase shrink-0" id="next-bg-${bg.id}">
@@ -374,8 +382,7 @@ function subscribeToUpdates() {
     // Realtime untuk perubahan is_active di backgrounds
     supabaseClient.channel('monitor-bg-active-sync')
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'backgrounds' }, async () => {
-            // Reload backgrounds aktif dan re-render kolom
-            const { data: bgs } = await supabaseClient.from('backgrounds').select('*').eq('is_active', true).order('id');
+            const { data: bgs } = await supabaseClient.from('backgrounds').select('*').order('id');
             if (bgs) {
                 backgrounds = bgs;
                 renderColumns();
