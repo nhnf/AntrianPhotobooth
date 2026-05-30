@@ -94,7 +94,6 @@ async function loadBackgrounds() {
         .order('id');
     if (error) { showPopup('Error', 'Gagal memuat backgrounds: ' + error.message, true); return; }
     backgrounds = data || [];
-    renderBackgroundToggles();
 }
 
 async function fetchAllCustomers() {
@@ -1394,57 +1393,6 @@ async function loadBoothBgSettings() {
     });
 }
 
-function renderBackgroundToggles() {
-    const container = document.getElementById('background-toggle-list');
-    if (!container || backgrounds.length === 0) return;
-
-    // Tampilkan selector booth di atas
-    const boothOptions = allBooths.map(b =>
-        `<option value="${b.id}">${escapeHTML(b.nama_booth)}</option>`
-    ).join('');
-
-    container.innerHTML = `
-        <div class="col-span-full mb-3">
-            <label class="font-mono text-xs font-bold uppercase">Pilih Booth:</label>
-            <select id="bg-toggle-booth-select" onchange="renderBgToggleCards()"
-                class="ml-2 border-2 border-black px-3 py-1.5 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-neoCyan">
-                ${boothOptions}
-            </select>
-        </div>
-        <div id="bg-toggle-cards" class="col-span-full grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
-    `;
-    
-    renderBgToggleCards();
-}
-
-function renderBgToggleCards() {
-    const select = document.getElementById('bg-toggle-booth-select');
-    const cardsContainer = document.getElementById('bg-toggle-cards');
-    if (!select || !cardsContainer) return;
-    
-    const boothId = parseInt(select.value);
-    const settings = boothBgSettings[boothId] || {};
-
-    cardsContainer.innerHTML = backgrounds.map(bg => {
-        const isActive = settings[bg.id] !== false; // default true
-        return `
-        <div class="border-4 border-black shadow-[4px_4px_0px_0px_#000] ${isActive ? 'bg-white' : 'bg-gray-100'}">
-            <div class="p-3 border-b-2 border-black ${isActive ? 'bg-neoGreen' : 'bg-gray-300'}">
-                <div class="font-black uppercase text-sm truncate">${escapeHTML(bg.nama_background)}</div>
-                <div class="font-mono text-[10px] font-bold mt-0.5 ${isActive ? 'text-black' : 'text-gray-500'}">
-                    ${isActive ? '🟢 TERBUKA' : '🔴 DIKUNCI'}
-                </div>
-            </div>
-            <div class="p-3">
-                <button onclick="toggleBackground(${boothId}, ${bg.id}, ${!isActive})"
-                    class="w-full neo-button ${isActive ? 'bg-neoRed text-white' : 'bg-neoGreen text-black'} font-black uppercase py-2 text-xs">
-                    ${isActive ? '🔒 Kunci' : '🔓 Buka'}
-                </button>
-            </div>
-        </div>`;
-    }).join('');
-}
-
 async function toggleBackground(boothId, bgId, newStatus) {
     const bg = backgrounds.find(b => b.id === bgId);
     const booth = allBooths.find(b => b.id === boothId);
@@ -1473,7 +1421,20 @@ async function toggleBackground(boothId, bgId, newStatus) {
             // Update local state
             if (!boothBgSettings[boothId]) boothBgSettings[boothId] = {};
             boothBgSettings[boothId][bgId] = newStatus;
-            renderBgToggleCards();
+            // Re-render hanya section background di booth card yang bersangkutan
+            const bgTogglesEl = document.getElementById(`bg-toggles-${boothId}`);
+            if (bgTogglesEl) {
+                const settings = boothBgSettings[boothId];
+                bgTogglesEl.innerHTML = backgrounds.map(bg => {
+                    const active = settings[bg.id] !== false;
+                    return `
+                    <button onclick="toggleBackground(${boothId}, ${bg.id}, ${!active})"
+                        class="flex items-center gap-1.5 px-2 py-1.5 border-2 border-black font-bold text-xs uppercase transition-colors ${active ? 'bg-neoGreen hover:bg-neoRed hover:text-white' : 'bg-gray-200 hover:bg-neoGreen'}">
+                        <span>${active ? '🟢' : '🔴'}</span>
+                        <span class="truncate">${escapeHTML(bg.nama_background)}</span>
+                    </button>`;
+                }).join('');
+            }
             showPopup('Berhasil', `✅ Background <b>${escapeHTML(bg.nama_background)}</b> berhasil ${newStatus ? 'dibuka' : 'dikunci'} untuk booth <b>${escapeHTML(booth.nama_booth)}</b>.`);
         }
     );
@@ -1572,6 +1533,23 @@ function renderBoothManagement() {
                             class="neo-button bg-neoPink font-bold uppercase py-2 px-4 text-sm whitespace-nowrap">
                         🔄 Reset Counter
                     </button>
+                </div>
+                
+                <!-- Buka / Kunci Background per Booth -->
+                <div class="border-t-2 border-black pt-3">
+                    <div class="font-mono text-xs font-bold uppercase mb-2">🖼️ Buka / Kunci Background:</div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2" id="bg-toggles-${b.id}">
+                        ${backgrounds.map(bg => {
+                            const settings = boothBgSettings[b.id] || {};
+                            const isActive = settings[bg.id] !== false;
+                            return `
+                            <button onclick="toggleBackground(${b.id}, ${bg.id}, ${!isActive})"
+                                class="flex items-center gap-1.5 px-2 py-1.5 border-2 border-black font-bold text-xs uppercase transition-colors ${isActive ? 'bg-neoGreen hover:bg-neoRed hover:text-white' : 'bg-gray-200 hover:bg-neoGreen'}">
+                                <span>${isActive ? '🟢' : '🔴'}</span>
+                                <span class="truncate">${escapeHTML(bg.nama_background)}</span>
+                            </button>`;
+                        }).join('')}
+                    </div>
                 </div>
                 
                 <!-- Tombol Simpan Pengaturan -->
