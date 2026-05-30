@@ -178,7 +178,22 @@ async function loadData() {
     try {
         const { data: bgs, error: bgError } = await supabaseClient.from('backgrounds').select('*').order('id');
         if (bgError) return console.error(bgError);
-        backgrounds = bgs;
+        
+        // Fetch booth-specific settings
+        let bgSettings = {};
+        if (currentBoothId) {
+            const { data: settings } = await supabaseClient
+                .from('booth_background_settings')
+                .select('background_id, is_active')
+                .eq('booth_id', currentBoothId);
+            (settings || []).forEach(s => { bgSettings[s.background_id] = s.is_active; });
+        }
+        
+        // Merge is_active per booth
+        backgrounds = (bgs || []).map(bg => ({
+            ...bg,
+            is_active: bgSettings[bg.id] !== undefined ? bgSettings[bg.id] : (bg.is_active !== false)
+        }));
 
         let queueQuery = supabaseClient
             .from('queues')
@@ -383,10 +398,22 @@ function subscribeToUpdates() {
     supabaseClient.channel('monitor-bg-active-sync')
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'backgrounds' }, async () => {
             const { data: bgs } = await supabaseClient.from('backgrounds').select('*').order('id');
-            if (bgs) {
-                backgrounds = bgs;
-                renderColumns();
-            }
+            if (bgs) { backgrounds = bgs; renderColumns(); }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'booth_background_settings',
+            filter: currentBoothId ? `booth_id=eq.${currentBoothId}` : undefined }, async () => {
+            // Reload dengan settings terbaru
+            const { data: bgs } = await supabaseClient.from('backgrounds').select('*').order('id');
+            const { data: settings } = await supabaseClient
+                .from('booth_background_settings').select('background_id, is_active')
+                .eq('booth_id', currentBoothId);
+            const bgSettings = {};
+            (settings || []).forEach(s => { bgSettings[s.background_id] = s.is_active; });
+            backgrounds = (bgs || []).map(bg => ({
+                ...bg,
+                is_active: bgSettings[bg.id] !== undefined ? bgSettings[bg.id] : (bg.is_active !== false)
+            }));
+            renderColumns();
         })
         .subscribe();
 }

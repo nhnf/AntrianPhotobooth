@@ -63,7 +63,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadBooths(),
         loadBackgrounds(),
         fetchAllCustomers(),
-        loadUsers()
+        loadUsers(),
+        loadBoothBgSettings()
     ]);
 
     // Render setelah semua data siap
@@ -1376,14 +1377,56 @@ function downloadPDF() {
 // ============================================
 
 // ============================================
-// Background Toggle UI (Buka / Kunci)
+// Background Toggle UI (Buka / Kunci per Booth)
 // ============================================
+let boothBgSettings = {}; // { booth_id: { bg_id: is_active } }
+
+async function loadBoothBgSettings() {
+    const { data, error } = await supabaseClient
+        .from('booth_background_settings')
+        .select('booth_id, background_id, is_active');
+    if (error) { console.error('loadBoothBgSettings error:', error); return; }
+    
+    boothBgSettings = {};
+    (data || []).forEach(row => {
+        if (!boothBgSettings[row.booth_id]) boothBgSettings[row.booth_id] = {};
+        boothBgSettings[row.booth_id][row.background_id] = row.is_active;
+    });
+}
+
 function renderBackgroundToggles() {
     const container = document.getElementById('background-toggle-list');
     if (!container || backgrounds.length === 0) return;
 
-    container.innerHTML = backgrounds.map(bg => {
-        const isActive = bg.is_active !== false; // default true
+    // Tampilkan selector booth di atas
+    const boothOptions = allBooths.map(b =>
+        `<option value="${b.id}">${escapeHTML(b.nama_booth)}</option>`
+    ).join('');
+
+    container.innerHTML = `
+        <div class="col-span-full mb-3">
+            <label class="font-mono text-xs font-bold uppercase">Pilih Booth:</label>
+            <select id="bg-toggle-booth-select" onchange="renderBgToggleCards()"
+                class="ml-2 border-2 border-black px-3 py-1.5 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-neoCyan">
+                ${boothOptions}
+            </select>
+        </div>
+        <div id="bg-toggle-cards" class="col-span-full grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"></div>
+    `;
+    
+    renderBgToggleCards();
+}
+
+function renderBgToggleCards() {
+    const select = document.getElementById('bg-toggle-booth-select');
+    const cardsContainer = document.getElementById('bg-toggle-cards');
+    if (!select || !cardsContainer) return;
+    
+    const boothId = parseInt(select.value);
+    const settings = boothBgSettings[boothId] || {};
+
+    cardsContainer.innerHTML = backgrounds.map(bg => {
+        const isActive = settings[bg.id] !== false; // default true
         return `
         <div class="border-4 border-black shadow-[4px_4px_0px_0px_#000] ${isActive ? 'bg-white' : 'bg-gray-100'}">
             <div class="p-3 border-b-2 border-black ${isActive ? 'bg-neoGreen' : 'bg-gray-300'}">
@@ -1393,7 +1436,7 @@ function renderBackgroundToggles() {
                 </div>
             </div>
             <div class="p-3">
-                <button onclick="toggleBackground(${bg.id}, ${!isActive})"
+                <button onclick="toggleBackground(${boothId}, ${bg.id}, ${!isActive})"
                     class="w-full neo-button ${isActive ? 'bg-neoRed text-white' : 'bg-neoGreen text-black'} font-black uppercase py-2 text-xs">
                     ${isActive ? '🔒 Kunci' : '🔓 Buka'}
                 </button>
@@ -1402,48 +1445,36 @@ function renderBackgroundToggles() {
     }).join('');
 }
 
-async function toggleBackground(bgId, newStatus) {
+async function toggleBackground(boothId, bgId, newStatus) {
     const bg = backgrounds.find(b => b.id === bgId);
-    if (!bg) return;
+    const booth = allBooths.find(b => b.id === boothId);
+    if (!bg || !booth) return;
 
     const action = newStatus ? 'membuka' : 'mengunci';
     const actionLabel = newStatus ? 'BUKA' : 'KUNCI';
 
     showConfirm(
         `${newStatus ? '🔓' : '🔒'} ${actionLabel} Background`,
-        `${newStatus ? 'Buka' : 'Kunci'} background <b>${escapeHTML(bg.nama_background)}</b>?<br><br>` +
-        `${newStatus
-            ? 'Customer akan bisa memilih background ini.'
-            : 'Customer tidak akan bisa memilih background ini.'}`,
+        `${newStatus ? 'Buka' : 'Kunci'} background <b>${escapeHTML(bg.nama_background)}</b> untuk booth <b>${escapeHTML(booth.nama_booth)}</b>?`,
         `YA, ${actionLabel}`,
         async () => {
+            // Upsert ke booth_background_settings
             const { error } = await supabaseClient
-                .from('backgrounds')
-                .update({ is_active: newStatus })
-                .eq('id', bgId);
+                .from('booth_background_settings')
+                .upsert({ booth_id: boothId, background_id: bgId, is_active: newStatus },
+                    { onConflict: 'booth_id,background_id' });
 
             if (error) {
                 console.error('toggleBackground error:', error);
                 showPopup('Error', 'Gagal ' + action + ' background: ' + error.message, true);
                 return;
             }
-            
-            // Verify update berhasil
-            const { data: verify } = await supabaseClient
-                .from('backgrounds')
-                .select('is_active')
-                .eq('id', bgId)
-                .single();
-            
-            if (verify && verify.is_active !== newStatus) {
-                showPopup('Error', 'Update tidak tersimpan. Kemungkinan masalah RLS policy. Hubungi admin.', true);
-                return;
-            }
 
             // Update local state
-            bg.is_active = newStatus;
-            renderBackgroundToggles();
-            showPopup('Berhasil', `✅ Background <b>${escapeHTML(bg.nama_background)}</b> berhasil ${newStatus ? 'dibuka' : 'dikunci'}.`);
+            if (!boothBgSettings[boothId]) boothBgSettings[boothId] = {};
+            boothBgSettings[boothId][bgId] = newStatus;
+            renderBgToggleCards();
+            showPopup('Berhasil', `✅ Background <b>${escapeHTML(bg.nama_background)}</b> berhasil ${newStatus ? 'dibuka' : 'dikunci'} untuk booth <b>${escapeHTML(booth.nama_booth)}</b>.`);
         }
     );
 }

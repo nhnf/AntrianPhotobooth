@@ -335,6 +335,10 @@ function initSystemChannel() {
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'backgrounds' }, async () => {
             await loadBackgrounds();
         })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'booth_background_settings',
+            filter: currentBoothId ? `booth_id=eq.${currentBoothId}` : undefined }, async () => {
+            await loadBackgrounds();
+        })
         .subscribe();
 }
 
@@ -379,7 +383,21 @@ async function loadBackgrounds() {
             return;
         }
 
-        backgrounds = data;
+        // Fetch booth-specific settings kalau ada booth
+        let bgSettings = {};
+        if (currentBoothId) {
+            const { data: settings } = await supabaseClient
+                .from('booth_background_settings')
+                .select('background_id, is_active')
+                .eq('booth_id', currentBoothId);
+            (settings || []).forEach(s => { bgSettings[s.background_id] = s.is_active; });
+        }
+
+        // Merge: is_active per booth (override global is_active)
+        backgrounds = (data || []).map(bg => ({
+            ...bg,
+            is_active: bgSettings[bg.id] !== undefined ? bgSettings[bg.id] : (bg.is_active !== false)
+        }));
         backgrounds.forEach(bg => { bgQuantities[bg.id] = 0; });
 
         const colors = ['hover:bg-neoPink', 'hover:bg-neoYellow', 'hover:bg-neoCyan', 'hover:bg-neoGreen'];
