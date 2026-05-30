@@ -1423,7 +1423,20 @@ async function toggleBackground(bgId, newStatus) {
                 .eq('id', bgId);
 
             if (error) {
+                console.error('toggleBackground error:', error);
                 showPopup('Error', 'Gagal ' + action + ' background: ' + error.message, true);
+                return;
+            }
+            
+            // Verify update berhasil
+            const { data: verify } = await supabaseClient
+                .from('backgrounds')
+                .select('is_active')
+                .eq('id', bgId)
+                .single();
+            
+            if (verify && verify.is_active !== newStatus) {
+                showPopup('Error', 'Update tidak tersimpan. Kemungkinan masalah RLS policy. Hubungi admin.', true);
                 return;
             }
 
