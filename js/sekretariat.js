@@ -1860,14 +1860,41 @@ function resetAllQueues() {
 async function exportData() {
     if (currentBoothFilter === 'all') return showPopup('Error', 'Pilih booth spesifik terlebih dahulu untuk export.', true);
     const boothId = parseInt(currentBoothFilter);
+    const booth = allBooths.find(b => b.id === boothId);
+    
     const { data, error } = await supabaseClient.from('queues').select('*').eq('booth_id', boothId);
     if (error) return showPopup('Error', error.message, true);
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    
+    // Sanitasi: hanya export field yang diperlukan, hapus field sensitif internal
+    const ALLOWED_FIELDS = [
+        'nomor_antrian', 'nama_lengkap', 'kelas', 'alamat', 'no_wa',
+        'background_id', 'jumlah_foto', 'pigura', 'status', 'payment_status',
+        'payment_method', 'notes', 'picked_up', 'created_at', 'booth_id'
+    ];
+    const sanitized = (data || []).map(row => {
+        const clean = {};
+        ALLOWED_FIELDS.forEach(f => { if (row[f] !== undefined) clean[f] = row[f]; });
+        return clean;
+    });
+    
+    // Tambahkan metadata untuk validasi saat import
+    const exportPayload = {
+        _meta: {
+            version: '1.0',
+            exported_at: new Date().toISOString(),
+            booth_id: boothId,
+            booth_name: booth?.nama_booth || '',
+            row_count: sanitized.length
+        },
+        data: sanitized
+    };
+    
+    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.download = `backup-booth${boothId}-${new Date().toISOString().slice(0,10)}.json`;
+    a.download = `backup-${booth?.ticket_prefix || 'booth'}-${new Date().toISOString().slice(0,10)}.json`;
     a.href = url; a.click(); URL.revokeObjectURL(url);
-    showPopup('Berhasil', '✅ Data antrian booth ini berhasil diekspor JSON.');
+    showPopup('Berhasil', `✅ ${sanitized.length} data antrian berhasil diekspor.`);
 }
 
 function importData(event) {
@@ -1878,23 +1905,120 @@ function importData(event) {
     const boothId = parseInt(currentBoothFilter);
     const file = event.target.files[0];
     if (!file) return;
+    
+    // Validasi ukuran file (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+        document.getElementById('import-file').value = '';
+        return showPopup('Error', 'File terlalu besar. Maksimal 5MB.', true);
+    }
+    
+    // Validasi ekstensi
+    if (!file.name.endsWith('.json')) {
+        document.getElementById('import-file').value = '';
+        return showPopup('Error', 'Hanya file .json yang diizinkan.', true);
+    }
+    
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
-            const data = JSON.parse(e.target.result);
-            if (!Array.isArray(data)) throw new Error('Format tidak valid.');
-            showConfirm('Import Data', `Ditemukan ${data.length} baris. Import akan MENGGANTIKAN data booth ini. Lanjutkan?`,
-                'YA, IMPORT', async () => {
-                    const { data: rows } = await supabaseClient.from('queues').select('id').eq('booth_id', boothId);
-                    if (rows?.length) await supabaseClient.from('queues').delete().in('id', rows.map(r => r.id));
-                    const clean = data.map(({ id, ...rest }) => ({ ...rest, booth_id: boothId }));
-                    const { error } = await supabaseClient.from('queues').insert(clean);
-                    if (error) throw error;
-                    showPopup('Berhasil', '✅ Import berhasil!');
-                    fetchAllCustomers();
-                    document.getElementById('import-file').value = '';
-                });
-        } catch (err) { showPopup('Error', 'Gagal membaca file: ' + err.message, true); }
+            let parsed;
+            try {
+                parsed = JSON.parse(e.target.result);
+            } catch {
+                throw new Error('File bukan JSON yang valid.');
+            }
+            
+            // Support format baru (dengan _meta) dan format lama (array langsung)
+            let rows;
+            if (Array.isArray(parsed)) {
+                rows = parsed; // format lama
+            } else if (parsed && Array.isArray(parsed.data)) {
+                rows = parsed.data; // format baru
+            } else {
+                throw new Error('Format file tidak valid. Harus berupa array atau objek dengan field "data".');
+            }
+            
+            if (rows.length === 0) throw new Error('File tidak berisi data.');
+            if (rows.length > 10000) throw new Error('Terlalu banyak data. Maksimal 10.000 baris.');
+            
+            // Validasi schema setiap row
+            const REQUIRED_FIELDS = ['nomor_antrian', 'nama_lengkap'];
+            const ALLOWED_FIELDS = [
+                'nomor_antrian', 'nama_lengkap', 'kelas', 'alamat', 'no_wa',
+                'background_id', 'jumlah_foto', 'pigura', 'status', 'payment_status',
+                'payment_method', 'notes', 'picked_up', 'created_at'
+            ];
+            const VALID_STATUSES = ['menunggu', 'dipanggil', 'selesai', 'batal', 'ditunda'];
+            const VALID_PAYMENT_STATUSES = ['lunas', 'belum_lunas'];
+            
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                
+                // Cek required fields
+                for (const f of REQUIRED_FIELDS) {
+                    if (!row[f]) throw new Error(`Baris ${i+1}: field "${f}" wajib ada.`);
+                }
+                
+                // Validasi tipe data
+                if (row.jumlah_foto !== undefined && (typeof row.jumlah_foto !== 'number' || row.jumlah_foto < 0 || row.jumlah_foto > 50)) {
+                    throw new Error(`Baris ${i+1}: jumlah_foto tidak valid (${row.jumlah_foto}).`);
+                }
+                if (row.pigura !== undefined && (typeof row.pigura !== 'number' || row.pigura < 0 || row.pigura > 20)) {
+                    throw new Error(`Baris ${i+1}: pigura tidak valid (${row.pigura}).`);
+                }
+                if (row.status && !VALID_STATUSES.includes(row.status)) {
+                    throw new Error(`Baris ${i+1}: status tidak valid (${row.status}).`);
+                }
+                if (row.payment_status && !VALID_PAYMENT_STATUSES.includes(row.payment_status)) {
+                    throw new Error(`Baris ${i+1}: payment_status tidak valid (${row.payment_status}).`);
+                }
+            }
+            
+            showConfirm('Import Data',
+                `Ditemukan <b>${rows.length} baris</b> data.<br><br>` +
+                `⚠️ Import akan <b>MENGGANTIKAN</b> semua data booth ini.<br>` +
+                `Data yang ada akan dihapus permanen.<br><br>Lanjutkan?`,
+                'YA, IMPORT',
+                async () => {
+                    try {
+                        // Hapus data lama
+                        const { data: existingRows } = await supabaseClient.from('queues').select('id').eq('booth_id', boothId);
+                        if (existingRows?.length) {
+                            await supabaseClient.from('queues').delete().in('id', existingRows.map(r => r.id));
+                        }
+                        
+                        // Sanitasi: hanya ambil field yang diizinkan, force booth_id yang benar
+                        const clean = rows.map(row => {
+                            const sanitized = { booth_id: boothId }; // force booth_id
+                            ALLOWED_FIELDS.forEach(f => {
+                                if (row[f] !== undefined && row[f] !== null) {
+                                    sanitized[f] = row[f];
+                                }
+                            });
+                            // Hapus id (akan di-generate ulang)
+                            delete sanitized.id;
+                            return sanitized;
+                        });
+                        
+                        // Insert dalam batch (max 500 per batch)
+                        const BATCH_SIZE = 500;
+                        for (let i = 0; i < clean.length; i += BATCH_SIZE) {
+                            const batch = clean.slice(i, i + BATCH_SIZE);
+                            const { error } = await supabaseClient.from('queues').insert(batch);
+                            if (error) throw error;
+                        }
+                        
+                        showPopup('Berhasil', `✅ Import berhasil! ${clean.length} baris data diimpor.`);
+                        fetchAllCustomers();
+                        document.getElementById('import-file').value = '';
+                    } catch (err) {
+                        showPopup('Error', 'Gagal import: ' + err.message, true);
+                    }
+                }
+            );
+        } catch (err) {
+            showPopup('Error', 'Gagal membaca file: ' + err.message, true);
+        }
     };
     reader.readAsText(file);
 }
