@@ -166,6 +166,22 @@
         </div>
     </div>
 
+    <!-- BACKGROUND MANAGEMENT PANEL -->
+    <div class="border-b-4 border-black bg-white shrink-0">
+        <div class="max-w-[1920px] mx-auto">
+            <button onclick="document.getElementById('bg-panel').classList.toggle('hidden')"
+                class="w-full p-3 font-mono font-bold uppercase text-sm flex items-center justify-between gap-2 hover:bg-neoCyan transition-colors border-b-2 border-black">
+                <span>🖼️ Buka / Kunci Background</span>
+                <span class="text-xs">▼ klik untuk buka/tutup</span>
+            </button>
+            <div id="bg-panel" class="hidden p-4 md:p-6">
+                <div id="background-toggle-list" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    <!-- Rendered via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- USER MANAGEMENT PANEL -->
     <div class="border-b-4 border-black bg-white shrink-0">
         <div class="max-w-[1920px] mx-auto">

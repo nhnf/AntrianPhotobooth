@@ -359,6 +359,7 @@ async function loadBackgrounds() {
         const { data, error } = await supabaseClient
             .from('backgrounds')
             .select('*')
+            .eq('is_active', true)
             .order('id');
 
         const listEl = document.getElementById('bg-list');

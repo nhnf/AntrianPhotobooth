@@ -176,7 +176,7 @@ async function loadData() {
     }
 
     try {
-        const { data: bgs, error: bgError } = await supabaseClient.from('backgrounds').select('*').order('id');
+        const { data: bgs, error: bgError } = await supabaseClient.from('backgrounds').select('*').eq('is_active', true).order('id');
         if (bgError) return console.error(bgError);
         backgrounds = bgs;
 

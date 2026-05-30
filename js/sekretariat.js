@@ -93,6 +93,7 @@ async function loadBackgrounds() {
         .order('id');
     if (error) { showPopup('Error', 'Gagal memuat backgrounds: ' + error.message, true); return; }
     backgrounds = data || [];
+    renderBackgroundToggles();
 }
 
 async function fetchAllCustomers() {
@@ -1373,6 +1374,67 @@ function downloadPDF() {
 // ============================================
 // Booth Management UI
 // ============================================
+
+// ============================================
+// Background Toggle UI (Buka / Kunci)
+// ============================================
+function renderBackgroundToggles() {
+    const container = document.getElementById('background-toggle-list');
+    if (!container || backgrounds.length === 0) return;
+
+    container.innerHTML = backgrounds.map(bg => {
+        const isActive = bg.is_active !== false; // default true
+        return `
+        <div class="border-4 border-black shadow-[4px_4px_0px_0px_#000] ${isActive ? 'bg-white' : 'bg-gray-100'}">
+            <div class="p-3 border-b-2 border-black ${isActive ? 'bg-neoGreen' : 'bg-gray-300'}">
+                <div class="font-black uppercase text-sm truncate">${escapeHTML(bg.nama_background)}</div>
+                <div class="font-mono text-[10px] font-bold mt-0.5 ${isActive ? 'text-black' : 'text-gray-500'}">
+                    ${isActive ? '🟢 TERBUKA' : '🔴 DIKUNCI'}
+                </div>
+            </div>
+            <div class="p-3">
+                <button onclick="toggleBackground(${bg.id}, ${!isActive})"
+                    class="w-full neo-button ${isActive ? 'bg-neoRed text-white' : 'bg-neoGreen text-black'} font-black uppercase py-2 text-xs">
+                    ${isActive ? '🔒 Kunci' : '🔓 Buka'}
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function toggleBackground(bgId, newStatus) {
+    const bg = backgrounds.find(b => b.id === bgId);
+    if (!bg) return;
+
+    const action = newStatus ? 'membuka' : 'mengunci';
+    const actionLabel = newStatus ? 'BUKA' : 'KUNCI';
+
+    showConfirm(
+        `${newStatus ? '🔓' : '🔒'} ${actionLabel} Background`,
+        `${newStatus ? 'Buka' : 'Kunci'} background <b>${escapeHTML(bg.nama_background)}</b>?<br><br>` +
+        `${newStatus
+            ? 'Customer akan bisa memilih background ini.'
+            : 'Customer tidak akan bisa memilih background ini.'}`,
+        `YA, ${actionLabel}`,
+        async () => {
+            const { error } = await supabaseClient
+                .from('backgrounds')
+                .update({ is_active: newStatus })
+                .eq('id', bgId);
+
+            if (error) {
+                showPopup('Error', 'Gagal ' + action + ' background: ' + error.message, true);
+                return;
+            }
+
+            // Update local state
+            bg.is_active = newStatus;
+            renderBackgroundToggles();
+            showPopup('Berhasil', `✅ Background <b>${escapeHTML(bg.nama_background)}</b> berhasil ${newStatus ? 'dibuka' : 'dikunci'}.`);
+        }
+    );
+}
+
 function renderBoothManagement() {
     const container = document.getElementById('booth-management-list');
     if (!container) return;
