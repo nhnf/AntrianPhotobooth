@@ -1409,12 +1409,21 @@ async function toggleBackground(boothId, bgId, newStatus) {
             // Upsert ke booth_background_settings
             const { error } = await supabaseClient
                 .from('booth_background_settings')
-                .upsert({ booth_id: boothId, background_id: bgId, is_active: newStatus },
-                    { onConflict: 'booth_id,background_id' });
+                .upsert(
+                    { booth_id: boothId, background_id: bgId, is_active: newStatus },
+                    { onConflict: 'booth_id,background_id' }
+                );
 
             if (error) {
                 console.error('toggleBackground error:', error);
-                showPopup('Error', 'Gagal ' + action + ' background: ' + error.message, true);
+                // Coba diagnosa masalah
+                let errMsg = error.message;
+                if (error.code === '42P01') {
+                    errMsg = 'Tabel booth_background_settings belum ada. Jalankan migration add_booth_background_settings.sql di Supabase SQL Editor.';
+                } else if (error.code === '42501') {
+                    errMsg = 'Tidak ada izin untuk mengubah data. Pastikan RLS policy sudah diset.';
+                }
+                showPopup('Error', 'Gagal ' + action + ' background:<br>' + errMsg, true);
                 return;
             }
 
