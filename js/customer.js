@@ -287,6 +287,7 @@ async function validateBoothAccess(boothId) {
 let systemChannel;
 // BUG-033 FIX: track booth-sync channel agar tidak ada duplicate subscription
 let boothSyncChannel = null;
+let bgSyncChannel = null; // realtime untuk perubahan backgrounds (is_active)
 
 function initSystemChannel() {
     systemChannel = supabaseClient.channel('system-events');
@@ -327,6 +328,14 @@ function initSystemChannel() {
     }
 
     systemChannel.subscribe();
+
+    // Realtime untuk perubahan is_active di backgrounds
+    if (bgSyncChannel) supabaseClient.removeChannel(bgSyncChannel);
+    bgSyncChannel = supabaseClient.channel('bg-active-sync')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'backgrounds' }, async () => {
+            await loadBackgrounds();
+        })
+        .subscribe();
 }
 
 // BUG-034 FIX: cleanup semua channel saat tab close
@@ -334,6 +343,7 @@ window.addEventListener('beforeunload', () => {
     if (realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
     if (systemChannel) supabaseClient.removeChannel(systemChannel);
     if (boothSyncChannel) supabaseClient.removeChannel(boothSyncChannel);
+    if (bgSyncChannel) supabaseClient.removeChannel(bgSyncChannel);
 });
 
 // Initialize system channel

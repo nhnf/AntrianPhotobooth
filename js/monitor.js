@@ -370,6 +370,18 @@ function subscribeToUpdates() {
             }
         })
         .subscribe();
+
+    // Realtime untuk perubahan is_active di backgrounds
+    supabaseClient.channel('monitor-bg-active-sync')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'backgrounds' }, async () => {
+            // Reload backgrounds aktif dan re-render kolom
+            const { data: bgs } = await supabaseClient.from('backgrounds').select('*').eq('is_active', true).order('id');
+            if (bgs) {
+                backgrounds = bgs;
+                renderColumns();
+            }
+        })
+        .subscribe();
 }
 
 // ============================================
