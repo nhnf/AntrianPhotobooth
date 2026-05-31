@@ -1109,6 +1109,15 @@ async function payNowOnline() {
             }
         }
         
+        // Buka window SEBELUM fetch (harus dalam user gesture context)
+        // Kalau dibuka setelah await, browser akan blokir sebagai popup
+        const payWindow = window.open('about:blank', '_blank');
+        if (!payWindow) {
+            showPopup('Gagal', 'Browser memblokir popup. Izinkan popup untuk situs ini lalu coba lagi.', true);
+            return;
+        }
+        payWindow.document.write('<html><body style="font-family:monospace;text-align:center;padding:40px"><h2>⏳ Memproses pembayaran...</h2><p>Mohon tunggu, Anda akan dialihkan ke halaman pembayaran.</p></body></html>');
+        
         const { data: payData, error: payError } = await supabaseClient.functions.invoke('create-payment', {
             body: {
                 nomor_antrian: myQueueId,
@@ -1123,9 +1132,13 @@ async function payNowOnline() {
         
         if (payError || (payData && payData.error)) {
             console.error("Payment Gateway Error:", payError || payData.error);
+            payWindow.close(); // tutup window kosong
             showPopup('Gagal', 'Gagal membuat tagihan online. Silakan coba lagi atau bayar tunai.', true);
         } else if (payData && payData.data && payData.data.pay_url) {
-            window.open(payData.data.pay_url, '_blank');
+            payWindow.location.href = payData.data.pay_url; // redirect ke payment URL
+        } else {
+            payWindow.close();
+            showPopup('Gagal', 'URL pembayaran tidak ditemukan. Silakan coba lagi.', true);
         }
     } catch (e) {
         console.error(e);
