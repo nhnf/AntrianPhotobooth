@@ -303,9 +303,16 @@ function renderCalledPanel() {
                     <div class="w-full bg-black text-white font-black uppercase py-1.5 px-2 text-sm truncate mb-1">
                         ${currentCalled.nama_lengkap || '-'}
                     </div>
-                    <div class="font-mono text-xs font-bold border-2 border-black px-2 py-0.5 uppercase">
+                    <div class="font-mono text-xs font-bold border-2 border-black px-2 py-0.5 uppercase mb-1">
                         KLS: ${currentCalled.kelas || '-'}
                     </div>
+                    ${(() => {
+                        const customerData = allCustomerData.find(q => q.nomor_antrian === currentCalled.nomor_antrian);
+                        const isLunas = customerData?.payment_status === 'lunas';
+                        return isLunas
+                            ? `<div class="text-[10px] font-black uppercase bg-neoGreen border-2 border-black px-2 py-0.5 tracking-wider">✅ LUNAS</div>`
+                            : `<div class="text-[10px] font-black uppercase bg-neoRed text-white border-2 border-black px-2 py-0.5 tracking-wider">❌ BELUM LUNAS</div>`;
+                    })()}
                 ` : ''}
             </div>
 
@@ -725,7 +732,10 @@ function renderCustomerTable() {
                 item.status === STATUS.DIPANGGIL ? '📢' :
                     item.status === STATUS.BATAL ? '❌' :
                         item.status === STATUS.DITUNDA ? '⏸️' : '⏳';
-            return `${statusIcon} ${escapeHTML(item.background)} (${item.qty}x)`;
+            const payBadge = isLunas
+                ? `<span class="ml-1 text-[9px] font-black text-neoGreen bg-black px-1">LUNAS</span>`
+                : `<span class="ml-1 text-[9px] font-black text-neoRed bg-black px-1">BELUM</span>`;
+            return `${statusIcon} ${escapeHTML(item.background)} (${item.qty}x)${payBadge}`;
         });
         if (c.totalPigura > 0) purchaseLines.push(`🖼️ Pigura (${c.totalPigura}x)`);
         
