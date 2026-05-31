@@ -102,7 +102,18 @@ serve(async (req) => {
           const { data: bgData } = await supabase.from('backgrounds').select('nama_background').eq('id', newRecord.background_id).single();
           const namaBg = bgData ? bgData.nama_background : 'Area Photobooth';
 
-          pesanWA = `Halo ${nama},\n\nNomor antrian Anda *${nomorAntrian}* sedang dipanggil! 🎉\nSilakan langsung menuju ke *${namaBg}*. Jangan sampai terlewat!`;
+          // Cek berapa background yang dipesan customer ini
+          const { data: allBgOrders } = await supabase
+            .from('queues')
+            .select('background_id, status')
+            .eq('nomor_antrian', nomorAntrian)
+            .order('id', { ascending: true });
+          
+          const totalBg = allBgOrders ? allBgOrders.length : 1;
+          const bgIndex = allBgOrders ? allBgOrders.findIndex((q: any) => q.background_id === newRecord.background_id) + 1 : 1;
+          const bgInfo = totalBg > 1 ? ` (Sesi ${bgIndex} dari ${totalBg})` : '';
+
+          pesanWA = `Halo ${nama},\n\nNomor antrian Anda *${nomorAntrian}* sedang dipanggil! 🎉\nSilakan langsung menuju ke *${namaBg}*${bgInfo}. Jangan sampai terlewat!`;
 
           // C. CEK SISA 2 ANTRIAN
           // Ambil daftar yang menunggu di booth & background yang sama
