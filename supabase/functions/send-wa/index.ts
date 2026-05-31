@@ -12,7 +12,6 @@ async function sendWaFonnte(noWa: string, message: string) {
   const formData = new URLSearchParams();
   formData.append("target", noWa);
   formData.append("message", message);
-  // Tambahkan jeda acak 1-2 detik untuk menghindari deteksi spam dari WhatsApp
   formData.append("delay", "1-2");
 
   const response = await fetch("https://api.fonnte.com/send", {
@@ -29,11 +28,17 @@ async function sendWaFonnte(noWa: string, message: string) {
 serve(async (req) => {
   try {
     const payload = await req.json();
+    console.log("Webhook payload:", JSON.stringify(payload));
+
+    // Supabase webhook bisa kirim dalam 2 format:
+    // Format 1 (Database Webhook): { type, table, record, old_record }
+    // Format 2 (pg_net / older): { type, record, old_record }
     const type = payload.type;
-    const newRecord = payload.record;
-    const oldRecord = payload.old_record;
+    const newRecord = payload.record || payload.new;
+    const oldRecord = payload.old_record || payload.old;
 
     if (!newRecord || !newRecord.no_wa) {
+      console.log("Skip: no_wa kosong atau record tidak valid");
       return new Response(JSON.stringify({ message: "Bukan record valid / No WA kosong" }), { status: 200 });
     }
 
@@ -45,9 +50,11 @@ serve(async (req) => {
 
     let pesanWA = "";
 
+    // ============================================
     // 1. PENDAFTARAN (INSERT)
+    // ============================================
     if (type === 'INSERT') {
-      // Pastikan hanya kirim pesan 1 kali per nomor antrian (cek apakah ini insert row pertama)
+      // Kirim hanya untuk row pertama (cegah duplikat jika pesan banyak background)
       const { data: firstRow } = await supabase
         .from('queues')
         .select('id')
@@ -55,57 +62,97 @@ serve(async (req) => {
         .order('id', { ascending: true })
         .limit(1)
         .single();
-        
+
       if (firstRow && firstRow.id === newRecord.id) {
-        // Ambil total foto, pigura, dan rincian background
         const { data: allQueues } = await supabase
-            .from('queues')
-            .select('jumlah_foto, pigura, backgrounds(nama_background)')
-            .eq('nomor_antrian', nomorAntrian);
-        
+          .from('queues')
+          .select('jumlah_foto, pigura, backgrounds(nama_background)')
+          .eq('nomor_antrian', nomorAntrian);
+
         let totalFoto = 0;
         let totalPigura = 0;
-        let rincianBg: string[] = [];
-        
+        const rincianBg: string[] = [];
+
         if (allQueues) {
-            allQueues.forEach((q: any, index: number) => {
-                totalFoto += (q.jumlah_foto || 0);
-                // BUG FIX: pigura disimpan di setiap row dengan nilai sama.
-                // Ambil hanya dari row pertama agar tidak dihitung N× lipat.
-                if (index === 0) totalPigura = (q.pigura || 0);
-                if (q.backgrounds && q.backgrounds.nama_background) {
-                    rincianBg.push(`- ${q.backgrounds.nama_background} (${q.jumlah_foto} foto)`);
-                }
-            });
+          allQueues.forEach((q: any, index: number) => {
+            totalFoto += (q.jumlah_foto || 0);
+            if (index === 0) totalPigura = (q.pigura || 0);
+            if (q.backgrounds?.nama_background) {
+              rincianBg.push(`- ${q.backgrounds.nama_background} (${q.jumlah_foto} foto)`);
+            }
+          });
         }
-        
+
         const totalHarga = (totalFoto * 40000) + (totalPigura * 25000);
         const rincianPigura = totalPigura > 0 ? `\n- Pigura (${totalPigura} pcs)` : '';
         const formatter = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 });
 
-        pesanWA = `Halo ${nama},\n\nTerima kasih telah mendaftar di Photobooth Mediatech An-Nur II!\n\nDetail Pendaftaran:\nNomor Tiket: *${nomorAntrian}*\nNama: ${nama}\nKelas: ${kelas}\nAlamat: ${alamat}\n\n*Pesanan Anda:*\n${rincianBg.join('\n')}${rincianPigura}\n\n*Total Biaya: ${formatter.format(totalHarga)}*\n\nSilakan selesaikan pembayaran agar antrian Anda dapat diproses.\n(Abaikan jika Anda sudah memilih Bayar Tunai di Kasir).\n\n---\n💡 *Tips: Simpan nomor ini agar Anda bisa menerima notifikasi panggilan antrian dengan lancar. Balas "OKE" jika Anda sudah siap mengantri!*`;
+        pesanWA =
+          `Halo ${nama},\n\n` +
+          `Terima kasih telah mendaftar di Photobooth Mediatech An-Nur II!\n\n` +
+          `Detail Pendaftaran:\n` +
+          `Nomor Tiket: *${nomorAntrian}*\n` +
+          `Nama: ${nama}\n` +
+          `Kelas: ${kelas}\n` +
+          `Alamat: ${alamat}\n\n` +
+          `*Pesanan Anda:*\n${rincianBg.join('\n')}${rincianPigura}\n\n` +
+          `*Total Biaya: ${formatter.format(totalHarga)}*\n\n` +
+          `Silakan selesaikan pembayaran agar antrian Anda dapat diproses.\n` +
+          `(Abaikan jika Anda sudah memilih Bayar Tunai di Kasir).\n\n` +
+          `---\n` +
+          `💡 *Tips: Simpan nomor ini agar Anda bisa menerima notifikasi panggilan antrian dengan lancar.*`;
       }
     }
-    else if (type === 'UPDATE' && oldRecord) {
-      
+
+    // ============================================
+    // 2. UPDATE
+    // ============================================
+    else if (type === 'UPDATE') {
+      const statusBaru = newRecord.status;
+      const statusLama = oldRecord?.status;
+      const paymentBaru = newRecord.payment_status;
+      const paymentLama = oldRecord?.payment_status;
+
       // A. PEMBAYARAN LUNAS
-      if (oldRecord.payment_status !== 'lunas' && newRecord.payment_status === 'lunas') {
-        pesanWA = `Halo ${nama},\n\nPembayaran untuk tiket *${nomorAntrian}* telah lunas. Terima kasih!\nAntrian Anda siap untuk diproses.`;
+      if (paymentLama !== 'lunas' && paymentBaru === 'lunas') {
+        pesanWA =
+          `Halo ${nama},\n\n` +
+          `Pembayaran untuk tiket *${nomorAntrian}* telah lunas. Terima kasih! ✅\n` +
+          `Antrian Anda siap untuk diproses.`;
       }
 
       // B. STATUS BERUBAH
-      if (oldRecord.status !== newRecord.status) {
-        const status = newRecord.status;
+      if (statusLama !== statusBaru) {
 
-        if (status === "dipanggil") {
-          // Cari nama background
-          const { data: bgData } = await supabase.from('backgrounds').select('nama_background').eq('id', newRecord.background_id).single();
-          const namaBg = bgData ? bgData.nama_background : 'Area Photobooth';
+        // B1. DIPANGGIL — kirim WA setiap kali masuk background baru
+        if (statusBaru === "dipanggil") {
+          const { data: bgData } = await supabase
+            .from('backgrounds')
+            .select('nama_background')
+            .eq('id', newRecord.background_id)
+            .single();
+          const namaBg = bgData?.nama_background || 'Area Photobooth';
 
-          pesanWA = `Halo ${nama},\n\nNomor antrian Anda *${nomorAntrian}* sedang dipanggil! 🎉\nSilakan langsung menuju ke *${namaBg}*. Jangan sampai terlewat!`;
+          // Cek berapa background yang dipesan & ini sesi ke berapa
+          const { data: allBgOrders } = await supabase
+            .from('queues')
+            .select('background_id, status')
+            .eq('nomor_antrian', nomorAntrian)
+            .order('id', { ascending: true });
 
-          // C. CEK SISA 2 ANTRIAN
-          // Ambil daftar yang menunggu di booth & background yang sama
+          const totalBg = allBgOrders?.length || 1;
+          const bgIndex = allBgOrders
+            ? allBgOrders.findIndex((q: any) => q.background_id === newRecord.background_id) + 1
+            : 1;
+          const sesiInfo = totalBg > 1 ? ` (Sesi ${bgIndex} dari ${totalBg})` : '';
+
+          pesanWA =
+            `Halo ${nama},\n\n` +
+            `🎉 Nomor antrian Anda *${nomorAntrian}* sedang dipanggil!\n` +
+            `Silakan langsung menuju ke *${namaBg}*${sesiInfo}.\n\n` +
+            `Jangan sampai terlewat!`;
+
+          // B2. CEK SISA 2 ANTRIAN — kirim notif ke orang ke-3 dalam antrian
           const { data: waitingData } = await supabase
             .from('queues')
             .select('no_wa, nama_lengkap, nomor_antrian')
@@ -113,14 +160,10 @@ serve(async (req) => {
             .eq('status', 'menunggu')
             .order('created_at', { ascending: true });
 
-          // waitingData[0] = giliran selanjutnya (sisa 0 antrian)
-          // waitingData[1] = sisa 1 antrian
-          // waitingData[2] = sisa 2 antrian (ini yang mau kita WA)
           if (waitingData && waitingData.length >= 3) {
             const orangKe3 = waitingData[2];
-            
-            // Mencegah pesan double jika customer memesan banyak background:
-            // Kita pastikan pesan sisa 2 hanya dikirim untuk background PERTAMA yang ia pesan.
+
+            // Cegah double notif: hanya kirim jika ini background pertama yang dipesan
             const { data: firstBg } = await supabase
               .from('queues')
               .select('background_id')
@@ -130,43 +173,80 @@ serve(async (req) => {
               .single();
 
             if (firstBg && firstBg.background_id === newRecord.background_id) {
-              const msgSisa2 = `Halo ${orangKe3.nama_lengkap}!\n\nGiliran Anda (Nomor *${orangKe3.nomor_antrian}*) tinggal 2 antrian lagi. Harap bersiap-siap di dekat area Photobooth.`;
+              const msgSisa2 =
+                `Halo ${orangKe3.nama_lengkap}!\n\n` +
+                `Giliran Anda (Nomor *${orangKe3.nomor_antrian}*) tinggal *2 antrian lagi*.\n` +
+                `Harap bersiap-siap di dekat area Photobooth. 🏃`;
               await sendWaFonnte(orangKe3.no_wa, msgSisa2);
             }
           }
+        }
 
-        } else if (status === "selesai") {
-          // Cek apakah semua pesanan untuk nomor_antrian ini sudah selesai
+        // B3. SELESAI — kirim hanya jika SEMUA background sudah selesai
+        else if (statusBaru === "selesai") {
           const { data: allQueues } = await supabase
             .from('queues')
             .select('status')
             .eq('nomor_antrian', nomorAntrian);
-          
-          if (allQueues) {
-            const allSelesai = allQueues.every((q: any) => q.status === "selesai");
-            if (allSelesai) {
-              pesanWA = `Halo ${nama},\n\nTerima kasih telah melakukan sesi foto di Photobooth Mediatech An-Nur II!\n\nUntuk pengambilan hasil cetak pesanan Anda, silakan ambil di *Kantor SMA* pada tanggal *3 Juni 2026*.\n\nTerima kasih banyak!`;
-            }
+
+          if (allQueues && allQueues.every((q: any) => q.status === "selesai")) {
+            pesanWA =
+              `Halo ${nama},\n\n` +
+              `Terima kasih telah melakukan sesi foto di Photobooth Mediatech An-Nur II! 📸\n\n` +
+              `Untuk pengambilan hasil cetak pesanan Anda, silakan ambil di *Kantor SMA* pada tanggal *3 Juni 2026*.\n\n` +
+              `Terima kasih banyak!`;
           }
-        } else if (status === "batal") {
-          pesanWA = `Halo ${nama},\n\nMohon maaf, antrian tiket *${nomorAntrian}* Anda telah dibatalkan oleh admin. Jika ada pertanyaan, silakan hubungi petugas jaga.`;
-        } else if (status === "ditunda") {
-          pesanWA = `Halo ${nama},\n\nMohon maaf, antrian Anda dengan nomor *${nomorAntrian}* sedang ditunda. Harap segera melapor ke petugas jaga di area Photobooth.\n\n- Admin Photobooth`;
-        } else if (oldRecord.status === "ditunda" && status === "menunggu") {
-          pesanWA = `Halo ${nama},\n\nKehadiran Anda telah dikonfirmasi. Nomor antrian *${nomorAntrian}* telah dimasukkan kembali ke dalam daftar tunggu. Harap bersiap di sekitar lokasi.`;
+        }
+
+        // B4. BATAL
+        else if (statusBaru === "batal") {
+          pesanWA =
+            `Halo ${nama},\n\n` +
+            `Mohon maaf, antrian tiket *${nomorAntrian}* Anda telah dibatalkan oleh admin.\n` +
+            `Jika ada pertanyaan, silakan hubungi petugas jaga.`;
+        }
+
+        // B5. DITUNDA
+        else if (statusBaru === "ditunda") {
+          pesanWA =
+            `Halo ${nama},\n\n` +
+            `Mohon maaf, antrian Anda dengan nomor *${nomorAntrian}* sedang ditunda.\n` +
+            `Harap segera melapor ke petugas jaga di area Photobooth.\n\n` +
+            `- Admin Photobooth`;
+        }
+
+        // B6. KEMBALI KE ANTRIAN (dari ditunda)
+        else if (statusLama === "ditunda" && statusBaru === "menunggu") {
+          pesanWA =
+            `Halo ${nama},\n\n` +
+            `Kehadiran Anda telah dikonfirmasi. ✅\n` +
+            `Nomor antrian *${nomorAntrian}* telah dimasukkan kembali ke dalam daftar tunggu.\n` +
+            `Harap bersiap di sekitar lokasi.`;
         }
       }
     }
 
+    // ============================================
+    // Kirim WA
+    // ============================================
     if (pesanWA !== "") {
+      console.log(`Sending WA to ${noWa}: ${pesanWA.substring(0, 50)}...`);
       const result = await sendWaFonnte(noWa, pesanWA);
-      return new Response(JSON.stringify({ success: true, result }), { headers: { "Content-Type": "application/json" } });
+      console.log("Fonnte result:", JSON.stringify(result));
+      return new Response(JSON.stringify({ success: true, result }), {
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
-    return new Response(JSON.stringify({ message: "No relevant action taken" }), { headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ message: "No relevant action taken" }), {
+      headers: { "Content-Type": "application/json" },
+    });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error processing webhook:", error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 });

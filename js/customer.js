@@ -1039,6 +1039,18 @@ async function payNowOnline() {
     btn.disabled = true;
     isPaymentInFlight = true;
 
+    // Buka window SEGERA saat user klik (masih dalam user gesture context)
+    // Harus sebelum semua await agar tidak diblokir browser popup blocker
+    const payWindow = window.open('about:blank', '_blank');
+    if (!payWindow) {
+        isPaymentInFlight = false;
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        showPopup('Gagal', 'Browser memblokir popup. Izinkan popup untuk situs ini lalu coba lagi.', true);
+        return;
+    }
+    payWindow.document.write('<html><body style="font-family:monospace;text-align:center;padding:40px"><h2>⏳ Memproses pembayaran...</h2><p>Mohon tunggu, Anda akan dialihkan ke halaman pembayaran.</p></body></html>');
+
     try {
         const { data: qData } = await supabaseClient
             .from('queues')
@@ -1081,11 +1093,12 @@ async function payNowOnline() {
         }
         
         if (amountToPay <= 0) {
+            payWindow.close();
             showPopup('Info', 'Tidak ada tagihan yang perlu dibayar.');
             return;
         }
         
-        // Konfirmasi sebelum redirect ke payment gateway
+        // Konfirmasi sebelum redirect ke payment gateway (partial payment)
         if (isPartialPayment) {
             const confirmed = await new Promise(resolve => {
                 showConfirm(
@@ -1097,7 +1110,6 @@ async function payNowOnline() {
                     '🚀 BAYAR SEKARANG',
                     () => resolve(true)
                 );
-                // kalau user batal popup ditutup, anggap false
                 const cancelBtn = document.querySelector('#popup-actions button:not(#btn-confirm-action)');
                 if (cancelBtn) {
                     const origClick = cancelBtn.onclick;
@@ -1105,18 +1117,10 @@ async function payNowOnline() {
                 }
             });
             if (!confirmed) {
+                payWindow.close();
                 return;
             }
         }
-        
-        // Buka window SEBELUM fetch (harus dalam user gesture context)
-        // Kalau dibuka setelah await, browser akan blokir sebagai popup
-        const payWindow = window.open('about:blank', '_blank');
-        if (!payWindow) {
-            showPopup('Gagal', 'Browser memblokir popup. Izinkan popup untuk situs ini lalu coba lagi.', true);
-            return;
-        }
-        payWindow.document.write('<html><body style="font-family:monospace;text-align:center;padding:40px"><h2>⏳ Memproses pembayaran...</h2><p>Mohon tunggu, Anda akan dialihkan ke halaman pembayaran.</p></body></html>');
         
         const { data: payData, error: payError } = await supabaseClient.functions.invoke('create-payment', {
             body: {
@@ -1142,6 +1146,7 @@ async function payNowOnline() {
         }
     } catch (e) {
         console.error(e);
+        if (payWindow && !payWindow.closed) payWindow.close();
         showPopup('Error', 'Terjadi kesalahan sistem.', true);
     } finally {
         // BUG-015 FIX: selalu reset flag & button state
