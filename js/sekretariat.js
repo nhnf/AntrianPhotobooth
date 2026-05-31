@@ -1264,24 +1264,83 @@ function exportCSV() {
         return;
     }
 
-    const headers = ['No', 'Tiket', 'Booth', 'Nama', 'No WA', 'Kelas', 'Alamat', 'Total Foto', 'Total Pigura', 'Total Harga', 'Status Bayar', 'Catatan', 'Tanggal'];
+    // Kumpulkan semua nama background yang unik (untuk header kolom dinamis)
+    const allBgNames = backgrounds.map(bg => bg.nama_background);
+
+    // Header
+    const headers = [
+        'No',
+        'Nomor Tiket',
+        'Booth',
+        'Nama Lengkap',
+        'No WA',
+        'Kelas',
+        'Alamat',
+        // Kolom per background (dinamis)
+        ...allBgNames.map(name => `${name} (foto)`),
+        ...allBgNames.map(name => `${name} (status)`),
+        // Ringkasan
+        'Total Foto',
+        'Total Pigura',
+        'Total Harga',
+        'Metode Bayar',
+        'Status Bayar',
+        'Status Pengambilan',
+        'Catatan Manual',
+        'Tanggal Daftar'
+    ];
+
     const rows = filteredCustomers.map((c, i) => {
         const booth = allBooths.find(b => b.id === c.booth_id);
-        return [
+
+        // Data per background
+        const bgFotoMap = {};
+        const bgStatusMap = {};
+        c.items.forEach(item => {
+            bgFotoMap[item.background] = (bgFotoMap[item.background] || 0) + item.qty;
+            // Status: ambil yang paling "maju" (selesai > dipanggil > menunggu > ditunda > batal)
+            const statusPriority = { selesai: 5, dipanggil: 4, menunggu: 3, ditunda: 2, batal: 1 };
+            const existing = bgStatusMap[item.background];
+            if (!existing || (statusPriority[item.status] || 0) > (statusPriority[existing] || 0)) {
+                bgStatusMap[item.background] = item.status;
+            }
+        });
+
+        // Parse manual notes (pisahkan dari payment notes)
+        const parsedNotes = parseNotes(c.notes);
+        const manualNotes = parsedNotes.manual || '';
+
+        // Status pengambilan
+        const allFinished = c.statuses.every(s => s === STATUS.SELESAI || s === STATUS.BATAL);
+        const pickupStatus = allFinished ? (c.picked_up ? 'Sudah Diambil' : 'Belum Diambil') : '-';
+
+        // Metode bayar
+        const metodeBayar = c.payment_method === 'online' ? 'Online' : c.payment_method === 'tunai' ? 'Tunai' : '-';
+
+        const row = [
             i + 1,
             c.nomor_antrian,
             booth?.nama_booth || '-',
-            `"${c.nama_lengkap}"`,
-            `"${c.no_wa}"`,
-            `"${c.kelas}"`,
-            `"${c.alamat}"`,
+            `"${(c.nama_lengkap || '').replace(/"/g, '""')}"`,
+            `"${(c.no_wa || '').replace(/"/g, '""')}"`,
+            `"${(c.kelas || '').replace(/"/g, '""')}"`,
+            `"${(c.alamat || '').replace(/"/g, '""')}"`,
+            // Foto per background
+            ...allBgNames.map(name => bgFotoMap[name] || 0),
+            // Status per background
+            ...allBgNames.map(name => bgStatusMap[name] || '-'),
+            // Ringkasan
             c.totalFoto,
             c.totalPigura,
             c.totalHarga,
+            metodeBayar,
             c.payment_status === 'lunas' ? 'Lunas' : 'Belum Lunas',
-            `"${c.notes || ''}"`,
+            pickupStatus,
+            `"${manualNotes.replace(/"/g, '""')}"`,
             new Date(c.created_at).toLocaleString('id-ID')
-        ].join(',');
+        ];
+
+        return row.join(',');
     });
 
     const csv = [headers.join(','), ...rows].join('\n');
@@ -1293,7 +1352,7 @@ function exportCSV() {
     a.href = url;
     a.click();
     URL.revokeObjectURL(url);
-    showPopup('Berhasil', '✅ Data berhasil di-export sebagai CSV.');
+    showPopup('Berhasil', `✅ ${filteredCustomers.length} data berhasil di-export sebagai CSV.`);
 }
 
 // ============================================
